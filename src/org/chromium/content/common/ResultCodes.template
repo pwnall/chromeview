@@ -1,0 +1,13 @@
+// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+package org.chromium.content.common;
+
+public class ResultCodes {
+#define RESULT_CODE(label, value) public static final int \
+  RESULT_CODE_ ## label = value;
+#include "content/public/common/result_codes_list.h"
+#undef RESULT_CODE
+}
+
