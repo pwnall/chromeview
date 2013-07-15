@@ -3,6 +3,10 @@
 ChormeView works like Android's WebView, but is backed by the latest Chromium
 code.
 
+## Required Reading
+* [Chrome For Developers Docs](http://dev.chromium.org/developers)
+* [Chromium Source Code Search](https://code.google.com/p/chromium/codesearch)
+* [Android Chromium Build Instructions](https://code.google.com/p/chromium/wiki/AndroidBuildInstructions)
 
 ## Why ChromeView
 
