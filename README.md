@@ -7,6 +7,7 @@ code.
 * [Chrome For Developers Docs](http://dev.chromium.org/developers)
 * [Chromium Source Code Search](https://code.google.com/p/chromium/codesearch)
 * [Android Chromium Build Instructions](https://code.google.com/p/chromium/wiki/AndroidBuildInstructions)
+* [Android WebView Talk at Google I/O 2012](https://developers.google.com/events/io/2012/sessions/gooio2012/122/)
 
 ## Why ChromeView
 
