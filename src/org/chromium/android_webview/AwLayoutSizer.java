@@ -60,6 +60,8 @@ public class AwLayoutSizer {
     /**
      * This is used to register the AwLayoutSizer to preferred content size change notifications in
      * the AwWebContentsDelegate.
+     * NOTE: The preferred size notifications come in from the Renderer main thread and might be
+     * out of sync with the content size as seen by the InProcessViewRenderer (and Compositor).
      */
     public AwWebContentsDelegateAdapter.PreferredSizeChangedListener
             getPreferredSizeChangedListener() {

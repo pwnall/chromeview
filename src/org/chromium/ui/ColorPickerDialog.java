@@ -4,209 +4,163 @@
 
 package org.chromium.ui;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
-import android.graphics.Shader;
-import android.graphics.SweepGradient;
-import android.os.Bundle;
-import android.view.MotionEvent;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 
 /**
- * UI for the color chooser that shows on the Android platform as a result
- * of &lt;input type=color &gt; form element.
- *
- * <p> Note that this UI is only temporary and will be replaced once the UI
- * design in
- * https://code.google.com/p/chromium/issues/detail?id=162491 is finalized
+ * UI for the color chooser that shows on the Android platform as a result of
+ * &lt;input type=color &gt; form element.
  */
-public class ColorPickerDialog extends Dialog {
+public class ColorPickerDialog extends AlertDialog implements OnColorChangedListener {
+    private final ColorPickerAdvanced mAdvancedColorPicker;
 
-    public interface OnColorChangedListener {
-        void colorChanged(int color);
-    }
+    private final ColorPickerSimple mSimpleColorPicker;
 
-    private OnColorChangedListener mListener;
-    private int mInitialColor;
+    private final Button mMoreButton;
 
-    private static class ColorPickerView extends View {
-        private static final int CENTER_RADIUS = 32;
-        private static final int DIALOG_HEIGHT = 200;
-        private static final int BOUNDING_BOX_EDGE = 100;
-        private static final float PI = 3.1415926f;
+    // The view up in the corner that shows the user the color they've currently selected.
+    private final View mCurrentColorView;
 
-        private final Paint mPaint;
-        private final Paint mCenterPaint;
-        private final int[] mColors;
-        private final OnColorChangedListener mListener;
-        private boolean mTrackingCenter;
-        private boolean mHighlightCenter;
+    private final OnColorChangedListener mListener;
 
-        private int center_x = -1;
-        private int center_y = -1;
+    private final int mInitialColor;
 
-        ColorPickerView(Context c, OnColorChangedListener listener, int color) {
-            super(c);
-            mListener = listener;
-            mColors = new int[] {
-                0xFFFF0000, 0xFFFF00FF, 0xFF0000FF, 0xFF00FFFF, 0xFF00FF00,
-                0xFFFFFF00, 0xFFFF0000
-            };
-            Shader shader = new SweepGradient(0, 0, mColors, null);
+    private int mCurrentColor;
 
-            mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            mPaint.setShader(shader);
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(32);
-
-            mCenterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            mCenterPaint.setColor(color);
-            mCenterPaint.setStrokeWidth(5);
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            if (center_x == -1) {
-                center_x = getWidth() / 2;
-            }
-            if (center_y == -1) {
-                center_y = getHeight() / 2;
-            }
-
-            float r = BOUNDING_BOX_EDGE - mPaint.getStrokeWidth() * 0.5f;
-
-            canvas.translate(center_x, center_y);
-
-            canvas.drawOval(new RectF(-r, -r, r, r), mPaint);
-            canvas.drawCircle(0, 0, CENTER_RADIUS, mCenterPaint);
-
-            if (mTrackingCenter) {
-                int color = mCenterPaint.getColor();
-                mCenterPaint.setStyle(Paint.Style.STROKE);
-
-                if (mHighlightCenter) {
-                    mCenterPaint.setAlpha(0xFF);
-                } else {
-                    mCenterPaint.setAlpha(0x80);
-                }
-                canvas.drawCircle(0, 0,
-                        CENTER_RADIUS + mCenterPaint.getStrokeWidth(),
-                        mCenterPaint);
-
-                mCenterPaint.setStyle(Paint.Style.FILL);
-                mCenterPaint.setColor(color);
-            }
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            setMeasuredDimension(widthMeasureSpec, DIALOG_HEIGHT);
-        }
-
-        private static int interpolate(int low, int high, float interPolant) {
-            return low + java.lang.Math.round(interPolant * (high - low));
-        }
-
-        static int interpolateColor(int colors[], float x, float y) {
-            float angle = (float)java.lang.Math.atan2(y, x);
-            float unit = angle / (2 * PI);
-            if (unit < 0) {
-                unit += 1;
-            }
-            if (unit <= 0) {
-                return colors[0];
-            }
-            if (unit >= 1) {
-                return colors[colors.length - 1];
-            }
-
-            float p = unit * (colors.length - 1);
-            int i = (int)p;
-            p -= i;
-
-            // Now p is just the fractional part [0...1) and i is the index.
-            int c0 = colors[i];
-            int c1 = colors[i+1];
-            int a = interpolate(Color.alpha(c0), Color.alpha(c1), p);
-            int r = interpolate(Color.red(c0), Color.red(c1), p);
-            int g = interpolate(Color.green(c0), Color.green(c1), p);
-            int b = interpolate(Color.blue(c0), Color.blue(c1), p);
-
-            return Color.argb(a, r, g, b);
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            float x = event.getX() - center_x;
-            float y = event.getY() - center_y;
-
-            // equivalent to sqrt(x * x + y * y) <= CENTER_RADIUS but cheaper
-            boolean inCenter = (x * x + y * y) <= (CENTER_RADIUS * CENTER_RADIUS);
-
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    mTrackingCenter = inCenter;
-                    if (inCenter) {
-                        mHighlightCenter = true;
-                        invalidate();
-                        break;
-                    }
-                case MotionEvent.ACTION_MOVE:
-                    if (mTrackingCenter) {
-                        if (mHighlightCenter != inCenter) {
-                            mHighlightCenter = inCenter;
-                            invalidate();
-                        }
-                    } else {
-                        mCenterPaint.setColor(interpolateColor(mColors, x, y));
-                        invalidate();
-                    }
-                    break;
-                case MotionEvent.ACTION_UP:
-                    if (mTrackingCenter) {
-                        if (inCenter) {
-                            mListener.colorChanged(mCenterPaint.getColor());
-                        }
-
-                        // Draw without the halo surrounding the central circle.
-                        mTrackingCenter = false;
-                        invalidate();
-                    }
-                    break;
-                 default:
-                     break;
-            }
-            return true;
-        }
-    }
-
-    public ColorPickerDialog(Context context,
-            OnColorChangedListener listener,
-            int initialColor) {
-        super(context);
+    /**
+     * @param context The context the dialog is to run in.
+     * @param theme The theme to display the dialog in.
+     * @param listener The object to notify when the color is set.
+     * @param color The initial color to set.
+     */
+    public ColorPickerDialog(Context context, OnColorChangedListener listener, int color) {
+        super(context, 0);
 
         mListener = listener;
-        mInitialColor = initialColor;
+        mInitialColor = color;
+        mCurrentColor = mInitialColor;
+
+        // Initialize title
+        LayoutInflater inflater = (LayoutInflater) context
+                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        View title = inflater.inflate(R.layout.color_picker_dialog_title, null);
+        setCustomTitle(title);
+
+        mCurrentColorView = title.findViewById(R.id.selected_color_view);
+
+        TextView titleText = (TextView) title.findViewById(R.id.title);
+        titleText.setText(R.string.color_picker_dialog_title);
+
+        // Initialize Set/Cancel buttons
+        String positiveButtonText = context.getString(R.string.color_picker_button_set);
+        setButton(BUTTON_POSITIVE, positiveButtonText,
+                new Dialog.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        tryNotifyColorSet(mCurrentColor);
+                    }
+                });
+
+        // Note that with the color picker there's not really any such thing as
+        // "cancelled".
+        // The color picker flow only finishes when we return a color, so we
+        // have to always
+        // return something. The concept of "cancelled" in this case just means
+        // returning
+        // the color that we were initialized with.
+        String negativeButtonText = context.getString(R.string.color_picker_button_cancel);
+        setButton(BUTTON_NEGATIVE, negativeButtonText,
+                new Dialog.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        tryNotifyColorSet(mInitialColor);
+                    }
+                });
 
         setOnCancelListener(new DialogInterface.OnCancelListener() {
             @Override
             public void onCancel(DialogInterface arg0) {
-                mListener.colorChanged(mInitialColor);
+                tryNotifyColorSet(mInitialColor);
             }
-          });
+        });
+
+        // Initialize main content view
+        View content = inflater.inflate(R.layout.color_picker_dialog_content, null);
+        setView(content);
+
+        // Initialize More button.
+        mMoreButton = (Button) content.findViewById(R.id.more_colors_button);
+        mMoreButton.setOnClickListener(new Button.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showAdvancedView();
+            }
+        });
+
+        // Initialize advanced color view (hidden initially).
+        mAdvancedColorPicker =
+                (ColorPickerAdvanced) content.findViewById(R.id.color_picker_advanced);
+        mAdvancedColorPicker.setVisibility(View.GONE);
+
+        // Initialize simple color view (default view).
+        mSimpleColorPicker = (ColorPickerSimple) content.findViewById(R.id.color_picker_simple);
+        mSimpleColorPicker.init(this);
+
+        updateCurrentColor(mInitialColor);
     }
 
+    /**
+     * Listens to the ColorPicker for when the user has changed the selected color, and
+     * updates the current color (the color shown in the title) accordingly.
+     *
+     * @param color The new color chosen by the user.
+     */
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(new ColorPickerView(getContext(), mListener, mInitialColor));
+    public void onColorChanged(int color) {
+        updateCurrentColor(color);
+    }
 
-        // TODO(miguelg): Internationalization
-        setTitle("Select Color");
+    /**
+     * Hides the simple view (the default) and shows the advanced one instead, hiding the
+     * "More" button at the same time.
+     */
+    private void showAdvancedView() {
+        // Only need to hide the borders, not the Views themselves, since the Views are
+        // contained within the borders.
+        View buttonBorder = findViewById(R.id.more_colors_button_border);
+        buttonBorder.setVisibility(View.GONE);
+
+        View simpleViewBorder = findViewById(R.id.color_picker_simple_border);
+        simpleViewBorder.setVisibility(View.GONE);
+
+        mAdvancedColorPicker.setVisibility(View.VISIBLE);
+        mAdvancedColorPicker.setListener(this);
+        mAdvancedColorPicker.setColor(mCurrentColor);
+    }
+
+    /**
+     * Tries to notify any listeners that the color has been set.
+     */
+    private void tryNotifyColorSet(int color) {
+        if (mListener != null) {
+            mListener.onColorChanged(color);
+        }
+    }
+
+    /**
+     * Updates the internal cache of the currently selected color, updating the colorful little
+     * box in the title at the same time.
+     */
+    private void updateCurrentColor(int color) {
+        mCurrentColor = color;
+        if (mCurrentColorView != null) {
+            mCurrentColorView.setBackgroundColor(color);
+        }
     }
 }

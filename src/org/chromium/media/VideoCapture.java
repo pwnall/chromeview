@@ -283,8 +283,8 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
                 if (mCameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
                     rotation = (mCameraOrientation + rotation) % 360;
                     rotation = (360 - rotation) % 360;
-                    flipHorizontal = (rotation == 180 || rotation == 0);
-                    flipVertical = !flipHorizontal;
+                    flipHorizontal = (rotation == 270 || rotation == 90);
+                    flipVertical = flipHorizontal;
                 } else {
                     rotation = (mCameraOrientation - rotation + 360) % 360;
                 }

@@ -23,6 +23,7 @@ public class ContentViewRenderView extends FrameLayout {
 
     // The native side of this object.
     private int mNativeContentViewRenderView = 0;
+    private final SurfaceHolder.Callback mSurfaceCallback;
 
     private SurfaceView mSurfaceView;
     private VSyncAdapter mVSyncAdapter;
@@ -41,9 +42,10 @@ public class ContentViewRenderView extends FrameLayout {
         assert mNativeContentViewRenderView != 0;
 
         mSurfaceView = createSurfaceView(getContext());
-        mSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
+        mSurfaceCallback = new SurfaceHolder.Callback() {
             @Override
             public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                assert mNativeContentViewRenderView != 0;
                 nativeSurfaceSetSize(mNativeContentViewRenderView, width, height);
                 if (mCurrentContentView != null) {
                     mCurrentContentView.getContentViewCore().onPhysicalBackingSizeChanged(
@@ -53,15 +55,18 @@ public class ContentViewRenderView extends FrameLayout {
 
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
+                assert mNativeContentViewRenderView != 0;
                 nativeSurfaceCreated(mNativeContentViewRenderView, holder.getSurface());
                 onReadyToRender();
             }
 
             @Override
             public void surfaceDestroyed(SurfaceHolder holder) {
+                assert mNativeContentViewRenderView != 0;
                 nativeSurfaceDestroyed(mNativeContentViewRenderView);
             }
-        });
+        };
+        mSurfaceView.getHolder().addCallback(mSurfaceCallback);
 
         mVSyncAdapter = new VSyncAdapter(getContext());
         addView(mSurfaceView,
@@ -124,13 +129,16 @@ public class ContentViewRenderView extends FrameLayout {
      * native resource can be freed.
      */
     public void destroy() {
+        mSurfaceView.getHolder().removeCallback(mSurfaceCallback);
         nativeDestroy(mNativeContentViewRenderView);
+        mNativeContentViewRenderView = 0;
     }
 
     /**
      * Makes the passed ContentView the one displayed by this ContentViewRenderView.
      */
     public void setCurrentContentView(ContentView contentView) {
+        assert mNativeContentViewRenderView != 0;
         ContentViewCore contentViewCore = contentView.getContentViewCore();
         nativeSetCurrentContentView(mNativeContentViewRenderView,
                 contentViewCore.getNativeContentViewCore());

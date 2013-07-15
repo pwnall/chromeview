@@ -4,8 +4,8 @@
 
 package org.chromium.android_webview;
 
-import android.content.pm.ActivityInfo;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Picture;
 import android.graphics.Rect;
@@ -23,6 +23,9 @@ import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 
+import org.chromium.content.browser.ContentVideoView;
+import org.chromium.content.browser.ContentVideoViewClient;
+import org.chromium.content.browser.ContentVideoViewControls;
 import org.chromium.content.browser.ContentViewClient;
 import org.chromium.content.browser.ContentViewCore;
 import org.chromium.content.browser.WebContentsObserverAndroid;
@@ -116,6 +119,10 @@ public abstract class AwContentsClient {
             return AwContentsClient.this.shouldOverrideKeyEvent(event);
         }
 
+        @Override
+        final public ContentVideoViewClient getContentVideoViewClient() {
+            return new AwContentVideoViewClient();
+        }
     }
 
     final void installWebContentsObserver(ContentViewCore contentViewCore) {
@@ -123,6 +130,40 @@ public abstract class AwContentsClient {
             mWebContentsObserver.detachFromWebContents();
         }
         mWebContentsObserver = new AwWebContentsObserver(contentViewCore);
+    }
+
+    private class AwContentVideoViewClient implements ContentVideoViewClient {
+        @Override
+        public void onShowCustomView(View view) {
+            WebChromeClient.CustomViewCallback cb = new WebChromeClient.CustomViewCallback() {
+                @Override
+                public void onCustomViewHidden() {
+                    ContentVideoView contentVideoView = ContentVideoView.getContentVideoView();
+                    if (contentVideoView != null)
+                        contentVideoView.exitFullscreen(false);
+                }
+            };
+            AwContentsClient.this.onShowCustomView(view, cb);
+        }
+
+        @Override
+        public void onDestroyContentVideoView() {
+            AwContentsClient.this.onHideCustomView();
+        }
+
+        @Override
+        public View getVideoLoadingProgressView() {
+            return AwContentsClient.this.getVideoLoadingProgressView();
+        }
+
+        @Override
+        public void keepScreenOn(boolean screenOn) {
+        }
+
+        @Override
+        public ContentVideoViewControls createControls() {
+            return null;
+        }
     }
 
     final void setDIPScale(double dipScale) {

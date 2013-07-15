@@ -25,19 +25,10 @@ public interface ContentViewDownloadDelegate {
 
     /**
      * Notify the host application that a download is started.
+     * @param filename File name of the downloaded file.
+     * @param mimeType Mime of the downloaded item.
      */
-    void onDownloadStarted();
-
-    /**
-     * Notify the host application that a download is finished.
-     * @param url The full url to the content that was downloaded.
-     * @param mimetype The mimetype of downloaded file.
-     * @param path Path of the downloaded file.
-     * @param contentLength The file size of the downloaded file (in bytes).
-     * @param successful Whether the download succeeded
-     */
-    void onDownloadCompleted(String url, String mimetype, String path,
-            long contentLength, boolean successful);
+    void onDownloadStarted(String filename, String mimeType);
 
     /**
      * Notify the host application that a download has an extension indicating

@@ -169,4 +169,8 @@ public class ContentViewClient {
 
     public void onGeometryChanged(int playerId, float x, float y, float width, float height) {
     }
+
+    public ContentVideoViewClient getContentVideoViewClient() {
+        return null;
+    }
 }

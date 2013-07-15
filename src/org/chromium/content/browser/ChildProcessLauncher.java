@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,7 @@ import org.chromium.content.common.IChildProcessCallback;
 import org.chromium.content.common.IChildProcessService;
 
 /**
- * This class provides the method to start/stop ChildProcess called by
- * native.
+ * This class provides the method to start/stop ChildProcess called by native.
  */
 @JNINamespace("content")
 public class ChildProcessLauncher {
@@ -43,7 +42,7 @@ public class ChildProcessLauncher {
     // classes and PrivilegedProcessClassX declared in this package, and defined as services in the
     // embedding application's manifest file.
     // (See {@link ChildProcessService} for more details on defining the services.)
-    /* package */ static final int MAX_REGISTERED_SANDBOXED_SERVICES = 6;
+    /* package */ static final int MAX_REGISTERED_SANDBOXED_SERVICES = 13;
     /* package */ static final int MAX_REGISTERED_PRIVILEGED_SERVICES = 3;
 
     private static class ChildConnectionAllocator {
@@ -113,8 +112,8 @@ public class ChildProcessLauncher {
         }
     }
 
-    // Service class for child process. As the default value it uses
-    // SandboxedProcessService0 and PrivilegedProcessService0
+    // Service class for child process. As the default value it uses SandboxedProcessService0 and
+    // PrivilegedProcessService0
     private static final ChildConnectionAllocator mSandboxedChildConnectionAllocator =
             new ChildConnectionAllocator(true);
     private static final ChildConnectionAllocator mPrivilegedChildConnectionAllocator =
@@ -154,7 +153,7 @@ public class ChildProcessLauncher {
             String[] commandLine, boolean inSandbox) {
         ChildProcessConnection connection = allocateConnection(context, inSandbox);
         if (connection != null) {
-            connection.bind(commandLine);
+            connection.start(commandLine);
         }
         return connection;
     }
@@ -309,30 +308,43 @@ public class ChildProcessLauncher {
     @CalledByNative
     static void stop(int pid) {
         Log.d(TAG, "stopping child connection: pid=" + pid);
-
         ChildProcessConnection connection = mServiceMap.remove(pid);
         if (connection == null) {
-            Log.w(TAG, "Tried to stop non-existent connection to pid: " + pid);
+            LogPidWarning(pid, "Tried to stop non-existent connection");
             return;
         }
-        connection.unbind();
+        connection.stop();
         freeConnection(connection);
     }
 
     /**
-     * Bind a child process as a high priority process so that it has the same
-     * priority as the main process. This can be used for the foreground renderer
-     * process to distinguish it from the the background renderer process.
+     * Remove the initial child process binding. Child processes are bound with initial binding to
+     * protect them from getting killed before they are put to use. This method allows to remove the
+     * binding once it is no longer needed.
+     */
+    static void removeInitialBinding(int pid) {
+        ChildProcessConnection connection = mServiceMap.get(pid);
+        if (connection == null) {
+            LogPidWarning(pid, "Tried to remove a binding for a non-existent connection");
+            return;
+        }
+        connection.removeInitialBinding();
+    }
+
+    /**
+     * Bind a child process as a high priority process so that it has the same priority as the main
+     * process. This can be used for the foreground renderer process to distinguish it from the the
+     * background renderer process.
      *
      * @param pid The process handle of the service connection obtained from {@link #start}.
      */
     static void bindAsHighPriority(int pid) {
         ChildProcessConnection connection = mServiceMap.get(pid);
         if (connection == null) {
-            Log.w(TAG, "Tried to bind a non-existent connection to pid: " + pid);
+            LogPidWarning(pid, "Tried to bind a non-existent connection");
             return;
         }
-        connection.bindHighPriority();
+        connection.attachAsActive();
     }
 
     /**
@@ -343,10 +355,10 @@ public class ChildProcessLauncher {
     static void unbindAsHighPriority(int pid) {
         ChildProcessConnection connection = mServiceMap.get(pid);
         if (connection == null) {
-            Log.w(TAG, "Tried to unbind non-existent connection to pid: " + pid);
+            LogPidWarning(pid, "Tried to unbind non-existent connection");
             return;
         }
-        connection.unbindHighPriority(false);
+        connection.detachAsActive();
     }
 
     /**
@@ -355,17 +367,16 @@ public class ChildProcessLauncher {
     private static IChildProcessCallback createCallback(final int callbackType) {
         return new IChildProcessCallback.Stub() {
             /**
-             * This is called by the remote service regularly to tell us about
-             * new values.  Note that IPC calls are dispatched through a thread
-             * pool running in each process, so the code executing here will
-             * NOT be running in our main thread -- so, to update the UI, we need
-             * to use a Handler.
+             * This is called by the remote service regularly to tell us about new values. Note that
+             * IPC calls are dispatched through a thread pool running in each process, so the code
+             * executing here will NOT be running in our main thread -- so, to update the UI, we
+             * need to use a Handler.
              */
             @Override
             public void establishSurfacePeer(
                     int pid, Surface surface, int primaryID, int secondaryID) {
-                // Do not allow a malicious renderer to connect to a producer. This is only
-                // used from stream textures managed by the GPU process.
+                // Do not allow a malicious renderer to connect to a producer. This is only used
+                // from stream textures managed by the GPU process.
                 if (callbackType != CALLBACK_FOR_GPU_PROCESS) {
                     Log.e(TAG, "Illegal callback for non-GPU process.");
                     return;
@@ -387,8 +398,16 @@ public class ChildProcessLauncher {
         };
     };
 
+    private static void LogPidWarning(int pid, String message) {
+        // This class is effectively a no-op in single process mode, so don't log warnings there.
+        if (pid > 0 && !nativeIsSingleProcess()) {
+            Log.w(TAG, message + ", pid=" + pid);
+        }
+    }
+
     private static native void nativeOnChildProcessStarted(int clientContext, int pid);
     private static native Surface nativeGetViewSurface(int surfaceId);
     private static native void nativeEstablishSurfacePeer(
             int pid, Surface surface, int primaryID, int secondaryID);
+    private static native boolean nativeIsSingleProcess();
 }

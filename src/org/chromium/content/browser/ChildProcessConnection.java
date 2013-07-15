@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,12 @@ import org.chromium.content.common.IChildProcessCallback;
 import org.chromium.content.common.IChildProcessService;
 import org.chromium.content.common.TraceEvent;
 
-public class ChildProcessConnection implements ServiceConnection {
+/**
+ * Manages a connection between the browser activity and a child service. The class is responsible
+ * for estabilishing the connection (start()), closing it (stop()) and increasing the priority of
+ * the service when it is in active use (between calls to attachAsActive() and detachAsActive()).
+ */
+public class ChildProcessConnection {
     interface DeathCallback {
         void onChildProcessDied(int pid);
     }
@@ -56,15 +61,27 @@ public class ChildProcessConnection implements ServiceConnection {
     private final Class<? extends ChildProcessService> mServiceClass;
 
     // Synchronization: While most internal flow occurs on the UI thread, the public API
-    // (specifically bind and unbind) may be called from any thread, hence all entry point methods
-    // into the class are synchronized on the ChildProcessConnection instance to protect access
-    // to these members. But see also the TODO where AsyncBoundServiceConnection is created.
+    // (specifically start and stop) may be called from any thread, hence all entry point methods
+    // into the class are synchronized on the ChildProcessConnection instance to protect access to
+    // these members. But see also the TODO where AsyncBoundServiceConnection is created.
     private final Object mUiThreadLock = new Object();
     private IChildProcessService mService = null;
+    // Set to true when the service connect is finished, even if it fails.
     private boolean mServiceConnectComplete = false;
     private int mPID = 0;  // Process ID of the corresponding child process.
-    private HighPriorityConnection mHighPriorityConnection = null;
-    private int mHighPriorityConnectionCount = 0;
+    // Initial binding protects the newly spawned process from being killed before it is put to use,
+    // it is maintained between calls to start() and removeInitialBinding().
+    private ChildServiceConnection mInitialBinding = null;
+    // Strong binding will make the service priority equal to the priority of the activity. We want
+    // the OS to be able to kill background renderers as it kills other background apps, so strong
+    // bindings are maintained only for services that are active at the moment (between
+    // attachAsActive() and detachAsActive()).
+    private ChildServiceConnection mStrongBinding = null;
+    // Low priority binding maintained in the entire lifetime of the connection, i.e. between calls
+    // to start() and stop().
+    private ChildServiceConnection mWaivedBinding = null;
+    // Incremented on attachAsActive(), decremented on detachAsActive().
+    private int mAttachAsActiveCount = 0;
 
     private static final String TAG = "ChildProcessConnection";
 
@@ -86,9 +103,78 @@ public class ChildProcessConnection implements ServiceConnection {
         }
     }
 
-    // This is only valid while the connection is being established.
+    // This is set by the consumer of the class in setupConnection() and is later used in
+    // doSetupConnection(), after which the variable is cleared. Therefore this is only valid while
+    // the connection is being set up.
     private ConnectionParams mConnectionParams;
-    private boolean mIsBound;
+
+    private class ChildServiceConnection implements ServiceConnection {
+        private boolean mBound = false;
+
+        private final int mBindFlags;
+
+        public ChildServiceConnection(int bindFlags) {
+            mBindFlags = bindFlags;
+        }
+
+        boolean bind(String[] commandLine) {
+            if (!mBound) {
+                final Intent intent = createServiceBindIntent();
+                if (commandLine != null) {
+                    intent.putExtra(EXTRA_COMMAND_LINE, commandLine);
+                }
+                mBound = mContext.bindService(intent, this, mBindFlags);
+            }
+            return mBound;
+        }
+
+        void unbind() {
+            if (mBound) {
+                mContext.unbindService(this);
+                mBound = false;
+            }
+        }
+
+        @Override
+        public void onServiceConnected(ComponentName className, IBinder service) {
+            synchronized(mUiThreadLock) {
+                // A flag from the parent class ensures we run the post-connection logic only once
+                // (instead of once per each ChildServiceConnection).
+                if (mServiceConnectComplete) {
+                    return;
+                }
+                TraceEvent.begin();
+                mServiceConnectComplete = true;
+                mService = IChildProcessService.Stub.asInterface(service);
+                if (mConnectionParams != null) {
+                    doConnectionSetup();
+                }
+                TraceEvent.end();
+            }
+        }
+
+
+        // Called on the main thread to notify that the child service did not disconnect gracefully.
+        @Override
+        public void onServiceDisconnected(ComponentName className) {
+            // Ensure that the disconnection logic runs only once (instead of once per each
+            // ChildServiceConnection).
+            if (mService == null) {
+                return;
+            }
+            int pid = mPID;  // Stash pid & connection callback since stop() will clear them.
+            Runnable onConnectionCallback =
+                mConnectionParams != null ? mConnectionParams.mOnConnectionCallback : null;
+            Log.w(TAG, "onServiceDisconnected (crash or killed by oom): pid=" + pid);
+            stop();  // We don't want to auto-restart on crash. Let the browser do that.
+            if (pid != 0) {
+                mDeathCallback.onChildProcessDied(pid);
+            }
+            if (onConnectionCallback != null) {
+                onConnectionCallback.run();
+            }
+        }
+    }
 
     ChildProcessConnection(Context context, int number, boolean inSandbox,
             ChildProcessConnection.DeathCallback deathCallback,
@@ -98,6 +184,11 @@ public class ChildProcessConnection implements ServiceConnection {
         mInSandbox = inSandbox;
         mDeathCallback = deathCallback;
         mServiceClass = serviceClass;
+        mInitialBinding = new ChildServiceConnection(Context.BIND_AUTO_CREATE);
+        mStrongBinding = new ChildServiceConnection(
+                Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT);
+        mWaivedBinding = new ChildServiceConnection(
+                Context.BIND_AUTO_CREATE | Context.BIND_WAIVE_PRIORITY);
     }
 
     int getServiceNumber() {
@@ -122,35 +213,30 @@ public class ChildProcessConnection implements ServiceConnection {
     }
 
     /**
-     * Bind to an IChildProcessService. This must be followed by a call to setupConnection()
-     * to setup the connection parameters. (These methods are separated to allow the client
-     * to pass whatever parameters they have available here, and complete the remainder
-     * later while reducing the connection setup latency).
+     * Starts a connection to an IChildProcessService. This must be followed by a call to
+     * setupConnection() to setup the connection parameters. start() and setupConnection() are
+     * separate to allow the client to pass whatever parameters they have available here, and
+     * complete the remainder later while reducing the connection setup latency.
      * @param commandLine (Optional) Command line for the child process. If omitted, then
      *                    the command line parameters must instead be passed to setupConnection().
      */
-    void bind(String[] commandLine) {
+    void start(String[] commandLine) {
         synchronized(mUiThreadLock) {
             TraceEvent.begin();
             assert !ThreadUtils.runningOnUiThread();
 
-            final Intent intent = createServiceBindIntent();
-
-            if (commandLine != null) {
-                intent.putExtra(EXTRA_COMMAND_LINE, commandLine);
-            }
-
-            mIsBound = mContext.bindService(intent, this, Context.BIND_AUTO_CREATE);
-            if (!mIsBound) {
+            if (!mInitialBinding.bind(commandLine)) {
                 onBindFailed();
+            } else {
+                mWaivedBinding.bind(null);
             }
             TraceEvent.end();
         }
     }
 
-    /** Setup a connection previous bound via a call to bind().
-     *
-     * This establishes the parameters that were not already supplied in bind.
+    /**
+     * Setups the connection after it was started with start(). This method should be called by the
+     * consumer of the class to set up additional connection parameters.
      * @param commandLine (Optional) will be ignored if the command line was already sent in bind()
      * @param fileToBeMapped a list of file descriptors that should be registered
      * @param callback Used for status updates regarding this process connection.
@@ -174,37 +260,21 @@ public class ChildProcessConnection implements ServiceConnection {
     }
 
     /**
-     * Unbind the IChildProcessService. It is safe to call this multiple times.
+     * Terminates the connection to IChildProcessService, closing all bindings. It is safe to call
+     * this multiple times.
      */
-    void unbind() {
+    void stop() {
         synchronized(mUiThreadLock) {
-            if (mIsBound) {
-                mContext.unbindService(this);
-                mIsBound = false;
-            }
+            mInitialBinding.unbind();
+            mStrongBinding.unbind();
+            mWaivedBinding.unbind();
+            mAttachAsActiveCount = 0;
             if (mService != null) {
-                if (mHighPriorityConnection != null) {
-                    unbindHighPriority(true);
-                }
                 mService = null;
                 mPID = 0;
             }
             mConnectionParams = null;
             mServiceConnectComplete = false;
-        }
-    }
-
-    // Called on the main thread to notify that the service is connected.
-    @Override
-    public void onServiceConnected(ComponentName className, IBinder service) {
-        synchronized(mUiThreadLock) {
-            TraceEvent.begin();
-            mServiceConnectComplete = true;
-            mService = IChildProcessService.Stub.asInterface(service);
-            if (mConnectionParams != null) {
-                doConnectionSetup();
-            }
-            TraceEvent.end();
         }
     }
 
@@ -218,7 +288,8 @@ public class ChildProcessConnection implements ServiceConnection {
 
     /**
      * Called when the connection parameters have been set, and a connection has been established
-     * (as signaled by onServiceConnected), or if the connection failed (mService will be false).
+     * (as signaled by onServiceConnected), or if the connection failed (as signaled by
+     * onBindFailed), in which case mService will be false.
      */
     private void doConnectionSetup() {
         TraceEvent.begin();
@@ -226,7 +297,7 @@ public class ChildProcessConnection implements ServiceConnection {
         // Capture the callback before it is potentially nulled in unbind().
         Runnable onConnectionCallback = mConnectionParams.mOnConnectionCallback;
         if (onConnectionCallback == null) {
-            unbind();
+            stop();
         } else if (mService != null) {
             Bundle bundle = new Bundle();
             bundle.putStringArray(EXTRA_COMMAND_LINE, mConnectionParams.mCommandLine);
@@ -284,83 +355,52 @@ public class ChildProcessConnection implements ServiceConnection {
         TraceEvent.end();
     }
 
-    // Called on the main thread to notify that the child service did not disconnect gracefully.
-    @Override
-    public void onServiceDisconnected(ComponentName className) {
-        int pid = mPID;  // Stash pid & connection callback since unbind() will clear them.
-        Runnable onConnectionCallback =
-            mConnectionParams != null ? mConnectionParams.mOnConnectionCallback : null;
-        Log.w(TAG, "onServiceDisconnected (crash?): pid=" + pid);
-        unbind();  // We don't want to auto-restart on crash. Let the browser do that.
-        if (pid != 0) {
-            mDeathCallback.onChildProcessDied(pid);
-        }
-        if (onConnectionCallback != null) {
-            onConnectionCallback.run();
+    /**
+     * Called to remove the strong binding estabilished when the connection was started. It is safe
+     * to call this multiple times.
+     */
+    void removeInitialBinding() {
+        synchronized(mUiThreadLock) {
+            mInitialBinding.unbind();
         }
     }
 
     /**
-     * Bind the service with a new high priority connection. This will make the service
-     * as important as the main process.
+     * Called when the service becomes active, ie important to the caller. This is handled by
+     * setting up a binding that will make the service as important as the main process. We allow
+     * callers to indicate the same connection as active multiple times. Instead of maintaining
+     * multiple bindings, we count the requests and unbind when the count drops to zero.
      */
-    void bindHighPriority() {
+    void attachAsActive() {
         synchronized(mUiThreadLock) {
             if (mService == null) {
                 Log.w(TAG, "The connection is not bound for " + mPID);
                 return;
             }
-            if (mHighPriorityConnection == null) {
-                mHighPriorityConnection = new HighPriorityConnection();
-                mHighPriorityConnection.bind();
+            if (mAttachAsActiveCount == 0) {
+                mStrongBinding.bind(null);
             }
-            mHighPriorityConnectionCount++;
+            mAttachAsActiveCount++;
         }
     }
 
     /**
-     * Unbind the service as the high priority connection.
+     * Called when the service is no longer considered active.
      */
-    void unbindHighPriority(boolean force) {
+    void detachAsActive() {
         synchronized(mUiThreadLock) {
+            assert mAttachAsActiveCount > 0;
             if (mService == null) {
                 Log.w(TAG, "The connection is not bound for " + mPID);
                 return;
             }
-            mHighPriorityConnectionCount--;
-            if (force || (mHighPriorityConnectionCount == 0 && mHighPriorityConnection != null)) {
-                mHighPriorityConnection.unbind();
-                mHighPriorityConnection = null;
+            mAttachAsActiveCount--;
+            if (mAttachAsActiveCount == 0) {
+                mStrongBinding.unbind();
             }
         }
     }
 
-    private class HighPriorityConnection implements ServiceConnection {
-
-        private boolean mHBound = false;
-
-        void bind() {
-            final Intent intent = createServiceBindIntent();
-
-            mHBound = mContext.bindService(intent, this,
-                    Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT);
-        }
-
-        void unbind() {
-            if (mHBound) {
-                mContext.unbindService(this);
-                mHBound = false;
-            }
-        }
-
-        @Override
-        public void onServiceConnected(ComponentName className, IBinder service) {
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName className) {
-        }
-    }
 
     /**
      * @return The connection PID, or 0 if not yet connected.

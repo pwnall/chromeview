@@ -130,27 +130,17 @@ public class AccessibilityInjector extends WebContentsObserverAndroid {
         if (!accessibilityIsAvailable()) return;
 
         int axsParameterValue = getAxsUrlParameterValue();
-        if (axsParameterValue == ACCESSIBILITY_SCRIPT_INJECTION_UNDEFINED) {
-            try {
-                Field field = Settings.Secure.class.getField("ACCESSIBILITY_SCRIPT_INJECTION");
-                field.setAccessible(true);
-                String ACCESSIBILITY_SCRIPT_INJECTION = (String) field.get(null);
+        if (axsParameterValue != ACCESSIBILITY_SCRIPT_INJECTION_UNDEFINED) {
+            return;
+        }
 
-                boolean onDeviceScriptInjectionEnabled = (Settings.Secure.getInt(
-                        mContentViewCore.getContext().getContentResolver(),
-                        ACCESSIBILITY_SCRIPT_INJECTION, 0) == 1);
-                String js = getScreenReaderInjectingJs();
-
-                if (onDeviceScriptInjectionEnabled && js != null && mContentViewCore.isAlive()) {
-                    addOrRemoveAccessibilityApisIfNecessary();
-                    mContentViewCore.evaluateJavaScript(js, null);
-                    mInjectedScriptEnabled = true;
-                    mScriptInjected = true;
-                }
-            } catch (NoSuchFieldException ex) {
-            } catch (IllegalArgumentException ex) {
-            } catch (IllegalAccessException ex) {
-            }
+        String js = getScreenReaderInjectingJs();
+        if (mContentViewCore.isDeviceAccessibilityScriptInjectionEnabled() &&
+                js != null && mContentViewCore.isAlive()) {
+            addOrRemoveAccessibilityApisIfNecessary();
+            mContentViewCore.evaluateJavaScript(js, null);
+            mInjectedScriptEnabled = true;
+            mScriptInjected = true;
         }
     }
 
@@ -198,10 +188,11 @@ public class AccessibilityInjector extends WebContentsObserverAndroid {
 
     /**
      * Sets whether or not the script is enabled.  If the script is disabled, we also stop any
-     * we output that is occurring.
+     * we output that is occurring. If the script has not yet been injected, injects it.
      * @param enabled Whether or not to enable the script.
      */
     public void setScriptEnabled(boolean enabled) {
+        if (enabled && !mScriptInjected) injectAccessibilityScriptIntoPage();
         if (!accessibilityIsAvailable() || mInjectedScriptEnabled == enabled) return;
 
         mInjectedScriptEnabled = enabled;

@@ -27,6 +27,10 @@ class MediaCodecBridge {
 
     private static final String TAG = "MediaCodecBridge";
 
+    // Error code for MediaCodecBridge. Keep this value in sync with
+    // INFO_MEDIA_CODEC_ERROR in media_codec_bridge.h.
+    private static final int MEDIA_CODEC_ERROR = -1000;
+
     private ByteBuffer[] mInputBuffers;
     private ByteBuffer[] mOutputBuffers;
 
@@ -41,8 +45,8 @@ class MediaCodecBridge {
         private final long mPresentationTimeMicroseconds;
         private final int mNumBytes;
 
-        private DequeueOutputResult(
-            int index, int flags, int offset, long presentationTimeMicroseconds, int numBytes) {
+        private DequeueOutputResult(int index, int flags, int offset,
+                long presentationTimeMicroseconds, int numBytes) {
             mIndex = index;
             mFlags = flags;
             mOffset = offset;
@@ -91,7 +95,12 @@ class MediaCodecBridge {
 
     @CalledByNative
     private int dequeueInputBuffer(long timeoutUs) {
-        return mMediaCodec.dequeueInputBuffer(timeoutUs);
+        try {
+            return mMediaCodec.dequeueInputBuffer(timeoutUs);
+        } catch(Exception e) {
+            Log.e(TAG, "Cannot dequeue Input buffer " + e.toString());
+        }
+        return MEDIA_CODEC_ERROR;
     }
 
     @CalledByNative
@@ -111,8 +120,13 @@ class MediaCodecBridge {
     }
 
     @CalledByNative
-    private MediaFormat getOutputFormat() {
-        return mMediaCodec.getOutputFormat();
+    private int getOutputHeight() {
+        return mMediaCodec.getOutputFormat().getInteger(MediaFormat.KEY_HEIGHT);
+    }
+
+    @CalledByNative
+    private int getOutputWidth() {
+        return mMediaCodec.getOutputFormat().getInteger(MediaFormat.KEY_WIDTH);
     }
 
     @CalledByNative
@@ -128,7 +142,25 @@ class MediaCodecBridge {
     @CalledByNative
     private void queueInputBuffer(
             int index, int offset, int size, long presentationTimeUs, int flags) {
-        mMediaCodec.queueInputBuffer(index, offset, size, presentationTimeUs, flags);
+        try {
+            mMediaCodec.queueInputBuffer(index, offset, size, presentationTimeUs, flags);
+        } catch(IllegalStateException e) {
+            Log.e(TAG, "Failed to queue input buffer " + e.toString());
+        }
+    }
+
+    @CalledByNative
+    private void queueSecureInputBuffer(
+            int index, int offset, byte[] iv, byte[] keyId, int[] numBytesOfClearData,
+            int[] numBytesOfEncryptedData, int numSubSamples, long presentationTimeUs) {
+        try {
+            MediaCodec.CryptoInfo cryptoInfo = new MediaCodec.CryptoInfo();
+            cryptoInfo.set(numSubSamples, numBytesOfClearData, numBytesOfEncryptedData,
+                    keyId, iv, MediaCodec.CRYPTO_MODE_AES_CTR);
+            mMediaCodec.queueSecureInputBuffer(index, offset, cryptoInfo, presentationTimeUs, 0);
+        } catch(IllegalStateException e) {
+            Log.e(TAG, "Failed to queue secure input buffer " + e.toString());
+        }
     }
 
     @CalledByNative
@@ -144,31 +176,78 @@ class MediaCodecBridge {
     @CalledByNative
     private DequeueOutputResult dequeueOutputBuffer(long timeoutUs) {
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-        int index = mMediaCodec.dequeueOutputBuffer(info, timeoutUs);
+        int index = MEDIA_CODEC_ERROR;
+        try {
+            index = mMediaCodec.dequeueOutputBuffer(info, timeoutUs);
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "Cannot dequeue output buffer " + e.toString());
+        }
         return new DequeueOutputResult(
                 index, info.flags, info.offset, info.presentationTimeUs, info.size);
     }
 
     @CalledByNative
-    private void configureVideo(MediaFormat format, Surface surface, MediaCrypto crypto,
+    private boolean configureVideo(MediaFormat format, Surface surface, MediaCrypto crypto,
             int flags) {
-        mMediaCodec.configure(format, surface, crypto, flags);
+        try {
+            mMediaCodec.configure(format, surface, crypto, flags);
+            return true;
+        } catch (IllegalStateException e) {
+          Log.e(TAG, "Cannot configure the video codec " + e.toString());
+        }
+        return false;
     }
 
     @CalledByNative
-    private void configureAudio(MediaFormat format, MediaCrypto crypto, int flags,
-            boolean playAudio) {
-        mMediaCodec.configure(format, null, crypto, flags);
-        if (playAudio) {
-            int sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE);
-            int channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
-            int channelConfig = (channelCount == 1) ? AudioFormat.CHANNEL_OUT_MONO :
-                    AudioFormat.CHANNEL_OUT_STEREO;
-            int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig,
-                    AudioFormat.ENCODING_PCM_16BIT);
-            mAudioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, channelConfig,
-                    AudioFormat.ENCODING_PCM_16BIT, minBufferSize, AudioTrack.MODE_STREAM);
+    private static MediaFormat createAudioFormat(String mime, int SampleRate, int ChannelCount) {
+        return MediaFormat.createAudioFormat(mime, SampleRate, ChannelCount);
+    }
+
+    @CalledByNative
+    private static MediaFormat createVideoFormat(String mime, int width, int height) {
+        return MediaFormat.createVideoFormat(mime, width, height);
+    }
+
+    @CalledByNative
+    private static void setCodecSpecificData(MediaFormat format, int index, ByteBuffer bytes) {
+        String name = null;
+        if (index == 0) {
+            name = "csd-0";
+        } else if (index == 1) {
+            name = "csd-1";
         }
+        if (name != null) {
+            format.setByteBuffer(name, bytes);
+        }
+    }
+
+    @CalledByNative
+    private static void setFrameHasADTSHeader(MediaFormat format) {
+        format.setInteger(MediaFormat.KEY_IS_ADTS, 1);
+    }
+
+    @CalledByNative
+    private boolean configureAudio(MediaFormat format, MediaCrypto crypto, int flags,
+            boolean playAudio) {
+        try {
+            mMediaCodec.configure(format, null, crypto, flags);
+            if (playAudio) {
+                int sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE);
+                int channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT);
+                int channelConfig = (channelCount == 1) ? AudioFormat.CHANNEL_OUT_MONO :
+                        AudioFormat.CHANNEL_OUT_STEREO;
+                // Using 16bit PCM for output. Keep this value in sync with
+                // kBytesPerAudioOutputSample in media_codec_bridge.cc.
+                int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig,
+                        AudioFormat.ENCODING_PCM_16BIT);
+                mAudioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, channelConfig,
+                        AudioFormat.ENCODING_PCM_16BIT, minBufferSize, AudioTrack.MODE_STREAM);
+            }
+            return true;
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "Cannot configure the audio codec " + e.toString());
+        }
+        return false;
     }
 
     @CalledByNative

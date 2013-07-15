@@ -27,6 +27,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Message;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -60,6 +61,7 @@ public class ChromeView extends FrameLayout {
 
   public ChromeView(Context context) {
     this(context, null);
+    Log.i("chromeview", "ChromeView ctor");
   }
 
   /** Constructor for inflating via XML. */
@@ -78,6 +80,7 @@ public class ChromeView extends FrameLayout {
             
     } catch(ClassCastException e) {
       // Hope that hardware acceleration is enabled.
+      Log.e("chromeview", e.getMessage());
     }
 
     SharedPreferences sharedPreferences = context.getSharedPreferences(
@@ -1163,6 +1166,23 @@ public class ChromeView extends FrameLayout {
           return false;
         }
       }
+    }
+    @Override
+    public void overScrollBy(int deltaX, int deltaY, int scrollX, int scrollY,
+        int scrollRangeX, int scrollRangeY, int maxOverScrollX,
+        int maxOverScrollY, boolean isTouchEvent) {
+      
+      // FIXME (davis): no clue if this is right
+      ChromeView.super.overScrollBy( deltaX,  deltaY,  scrollX,  scrollY,
+         scrollRangeX,  scrollRangeY,  maxOverScrollX,
+         maxOverScrollY,  isTouchEvent);
+      
+    }
+    @Override
+    public void super_scrollTo(int scrollX, int scrollY) {
+      
+      // FIXME (davis): no clue if this is right
+      
     }
   }
 }

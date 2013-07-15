@@ -10,23 +10,22 @@ import org.chromium.base.CalledByNative;
 import org.chromium.base.JNINamespace;
 import org.chromium.content.browser.ContentViewCore;
 import org.chromium.ui.ColorPickerDialog;
+import org.chromium.ui.OnColorChangedListener;
 
 /**
  * ColorChooserAndroid communicates with the java ColorPickerDialog and the
  * native color_chooser_android.cc
  */
-@JNINamespace("components")
+@JNINamespace("web_contents_delegate_android")
 public class ColorChooserAndroid {
     private final ColorPickerDialog mDialog;
     private final int mNativeColorChooserAndroid;
 
     private ColorChooserAndroid(int nativeColorChooserAndroid,
             Context context, int initialColor) {
-        ColorPickerDialog.OnColorChangedListener listener =
-                new ColorPickerDialog.OnColorChangedListener() {
-
+        OnColorChangedListener listener = new OnColorChangedListener() {
           @Override
-          public void colorChanged(int color) {
+          public void onColorChanged(int color) {
               mDialog.dismiss();
               nativeOnColorChosen(mNativeColorChooserAndroid, color);
           }
