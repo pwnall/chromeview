@@ -28,7 +28,7 @@ import android.util.Log;
  */
 public class HttpAuthDatabase {
 
-    private static final String LOGTAG = HttpAuthDatabase.class.getName();
+    private static final String LOGTAG = "HttpAuthDatabase";
 
     private static final int DATABASE_VERSION = 1;
 

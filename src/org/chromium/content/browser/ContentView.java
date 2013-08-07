@@ -488,6 +488,11 @@ public class ContentView extends FrameLayout
         return mContentViewCore.onGenericMotionEvent(event);
     }
 
+    @Override
+    public boolean performLongClick() {
+        return false;
+    }
+
     /**
      * Sets the current amount to offset incoming touch events by.  This is used to handle content
      * moving and not lining up properly with the android input system.

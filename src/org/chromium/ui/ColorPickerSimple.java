@@ -34,6 +34,8 @@ public class ColorPickerSimple extends View {
                                           Color.WHITE
                                         };
 
+    private Paint mBorderPaint;
+
     private Rect[] mBounds;
 
     private Paint[] mPaints;
@@ -75,6 +77,10 @@ public class ColorPickerSimple extends View {
             mPaints[i] = newPaint;
         }
 
+        mBorderPaint = new Paint();
+        int borderColor = getContext().getResources().getColor(R.color.color_picker_border_color);
+        mBorderPaint.setColor(borderColor);
+
         // Responds to the user touching the grid and works out which color has been chosen as
         // a result, depending on the X,Y coordinate. Note that we respond to the click event
         // here, but the onClick() method doesn't provide us with the X,Y coordinates, so we
@@ -99,6 +105,7 @@ public class ColorPickerSimple extends View {
 
     /**
      * Draws the grid of colors, based on the rectangles calculated in onSizeChanged().
+     * Also draws borders in between the colored rectangles.
      *
      * @param canvas The canvas the colors are drawn onto.
      */
@@ -107,8 +114,30 @@ public class ColorPickerSimple extends View {
         if (mBounds == null || mPaints == null) {
             return;
         }
+
+        canvas.drawColor(Color.WHITE);
+
+        // Draw the actual colored rectangles.
         for (int i = 0; i < GRID_CELL_COUNT; ++i) {
             canvas.drawRect(mBounds[i], mPaints[i]);
+        }
+
+        // Draw 1px borders between the rows.
+        for (int i = 0; i < ROW_COUNT - 1; ++i) {
+          canvas.drawLine(0,
+                  mBounds[i * COLUMN_COUNT].bottom + 1,
+                  getWidth(),
+                  mBounds[i * COLUMN_COUNT].bottom + 1,
+                  mBorderPaint);
+        }
+
+        // Draw 1px borders between the columns.
+        for (int j = 0; j < COLUMN_COUNT - 1; ++j) {
+          canvas.drawLine(mBounds[j].right + 1,
+                  0,
+                  mBounds[j].right + 1,
+                  getHeight(),
+                  mBorderPaint);
         }
     }
 
@@ -137,18 +166,20 @@ public class ColorPickerSimple extends View {
 
     /**
      * Calculates the sizes and positions of the cells in the grid, splitting
-     * them up as evenly as possible.
+     * them up as evenly as possible. Leaves 3 pixels between each cell so that
+     * we can draw a border between them as well, and leaves a pixel around the
+     * edge.
      */
     private void calculateGrid(final int width, final int height) {
         mBounds = new Rect[GRID_CELL_COUNT];
 
         for (int i = 0; i < ROW_COUNT; ++i) {
             for (int j = 0; j < COLUMN_COUNT; ++j) {
-                int left = j * width / COLUMN_COUNT;
-                int right = (j + 1) * width / COLUMN_COUNT;
+                int left = j * (width + 1) / COLUMN_COUNT + 1;
+                int right = (j + 1) * (width + 1) / COLUMN_COUNT - 2;
 
-                int top = i * height / ROW_COUNT;
-                int bottom = (i + 1) * height / ROW_COUNT;
+                int top = i * (height + 1) / ROW_COUNT + 1;
+                int bottom = (i + 1) * (height + 1) / ROW_COUNT - 2;
 
                 Rect rect = new Rect(left, top, right, bottom);
                 mBounds[(i * COLUMN_COUNT) + j] = rect;

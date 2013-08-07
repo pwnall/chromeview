@@ -178,8 +178,7 @@ class SelectFileDialog implements WindowAndroid.IntentCallback{
         }
         if (!success) {
             onFileNotSelected();
-            String openingFileError = window.getContext().getString(R.string.opening_file_error);
-            window.showError(openingFileError);
+            window.showError(R.string.opening_file_error);
         }
     }
 

@@ -84,8 +84,15 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
         };
 
         mCurrentDate = Calendar.getInstance();
-        mMinDate = createDateFromValue(minValue);
-        mMaxDate = createDateFromValue(maxValue);
+        if (minValue >= maxValue) {
+            mMinDate = Calendar.getInstance();
+            mMinDate.set(0, 0, 1);
+            mMaxDate = Calendar.getInstance();
+            mMaxDate.set(9999, 0, 1);
+        } else {
+            mMinDate = createDateFromValue(minValue);
+            mMaxDate = createDateFromValue(maxValue);
+        }
 
         // month
         mPositionInYearSpinner = (NumberPicker) findViewById(R.id.position_in_year);
@@ -209,6 +216,8 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
      * This method should be subclassed to update the spinners based on mCurrentDate.
      */
     protected void updateSpinners() {
+        mPositionInYearSpinner.setDisplayedValues(null);
+
         // set the spinner ranges respecting the min and max dates
         mPositionInYearSpinner.setMinValue(getMinPositionInYear());
         mPositionInYearSpinner.setMaxValue(getMaxPositionInYear());

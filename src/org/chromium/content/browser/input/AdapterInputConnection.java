@@ -311,7 +311,6 @@ public class AdapterInputConnection extends BaseInputConnection {
     @Override
     public boolean sendKeyEvent(KeyEvent event) {
         if (DEBUG) Log.w(TAG, "sendKeyEvent [" + event.getAction() + "]");
-        mImeAdapter.hideSelectionAndInsertionHandleControllers();
 
         // If this is a key-up, and backspace/del or if the key has a character representation,
         // need to update the underlying Editable (i.e. the local representation of the text
@@ -352,19 +351,9 @@ public class AdapterInputConnection extends BaseInputConnection {
             return true;
         }
 
-        // TODO(aurimas): remove this workaround of changing composition before confirmComposition
-        //                Blink should support keeping the cursor (http://crbug.com/239923)
-        int selectionStart = Selection.getSelectionStart(editable);
-        int compositionStart = getComposingSpanStart(editable);
         super.finishComposingText();
+        mImeAdapter.finishComposingText();
 
-        beginBatchEdit();
-        if (compositionStart != -1 && compositionStart < selectionStart
-                && !mImeAdapter.setComposingRegion(compositionStart, selectionStart)) {
-            return false;
-        }
-        if (!mImeAdapter.checkCompositionQueueAndCallNative("", 0, true)) return false;
-        endBatchEdit();
         return true;
     }
 

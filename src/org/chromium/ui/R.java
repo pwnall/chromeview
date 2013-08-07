@@ -53,4 +53,7 @@ public final class R {
     public static final class style {
         public static int AutofillPopupWindow;
     }
+    public static final class color {
+        public static int color_picker_border_color;
+    }
 }

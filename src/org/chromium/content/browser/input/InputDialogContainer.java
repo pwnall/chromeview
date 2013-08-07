@@ -99,7 +99,7 @@ public class InputDialogContainer {
                 minute == 0 && second == 0) {
             Calendar cal = Calendar.getInstance();
             result.set(cal.get(Calendar.SECOND), cal.get(Calendar.MINUTE),
-                    cal.get(Calendar.HOUR), cal.get(Calendar.DATE),
+                    cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.DATE),
                     cal.get(Calendar.MONTH), cal.get(Calendar.YEAR));
         } else {
             result.set(second, minute, hour, monthDay, month, year);
@@ -130,7 +130,7 @@ public class InputDialogContainer {
             mDialog = dialog;
         } else if (dialogType == sTextInputTypeTime) {
             mDialog = TimeDialog.create(mContext, new TimeListener(dialogType),
-                    1970, 0, 1, time.hour, time.minute, DateFormat.is24HourFormat(mContext),
+                    time.hour, time.minute, DateFormat.is24HourFormat(mContext),
                     minTime, maxTime);
         } else if (dialogType == sTextInputTypeDateTime ||
                 dialogType == sTextInputTypeDateTimeLocal) {

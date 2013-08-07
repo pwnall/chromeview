@@ -17,6 +17,8 @@ import android.util.Log;
 
 import java.util.List;
 
+import org.chromium.base.ContextTypes;
+
 /**
  * {@link PepperPluginManager} collects meta data about plugins from preloaded android apps
  * that reply to PEPPERPLUGIN intent query.
@@ -88,6 +90,11 @@ public class PepperPluginManager {
      * @return        Description string for plugins
      */
     public static String getPlugins(final Context context) {
+        if (DeviceUtils.isTv(context) &&
+                !ContextTypes.isRunningInWebapp(context)) {
+            // Chrome-for-tv enables plugins only on webapp mode.
+            return null;
+        }
         StringBuffer ret = new StringBuffer();
         PackageManager pm = context.getPackageManager();
         List<ResolveInfo> plugins = pm.queryIntentServices(

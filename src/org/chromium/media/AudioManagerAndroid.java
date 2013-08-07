@@ -21,7 +21,7 @@ import org.chromium.base.JNINamespace;
 
 @JNINamespace("media")
 class AudioManagerAndroid {
-    private static final String TAG = AudioManagerAndroid.class.getSimpleName();
+    private static final String TAG = "AudioManagerAndroid";
 
     // Most of Google lead devices use 44.1K as the default sampling rate, 44.1K
     // is also widely used on other android devices.

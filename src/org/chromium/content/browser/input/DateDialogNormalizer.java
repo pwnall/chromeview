@@ -8,43 +8,48 @@ import android.widget.DatePicker;
 import android.widget.DatePicker.OnDateChangedListener;
 
 import java.util.Calendar;
+import java.util.TimeZone;
 
 /**
  * Normalize a date dialog so that it respect min and max.
  */
 class DateDialogNormalizer {
-    private static final long ONE_DAY_MILLIS = 24 * 60 * 60 * 1000;
 
-    private static void setLimits(DatePicker picker, long min, long max) {
-        // DatePicker intervals are non inclusive.
-        long minTime = min > 0 ? min - 1 : 0;
-        long maxTime = (max - ONE_DAY_MILLIS) >= (Long.MAX_VALUE - ONE_DAY_MILLIS) ?
-                Long.MAX_VALUE : max + ONE_DAY_MILLIS;
+ private static void setLimits(DatePicker picker, long min, long max) {
+     // DatePicker intervals are non inclusive, the DatePicker will throw an
+     // exception when setting the min/max attribute to the current date
+     // so make sure this never happens
+     if (max <= min) {
+         return;
+     }
+     Calendar minCal = trimToDate(min);
+     Calendar maxCal = trimToDate(max);
+     int currentYear = picker.getYear();
+     int currentMonth = picker.getMonth();
+     int currentDayOfMonth =  picker.getDayOfMonth();
+     picker.updateDate(maxCal.get(Calendar.YEAR),
+             maxCal.get(Calendar.MONTH),
+             maxCal.get(Calendar.DAY_OF_MONTH));
+     picker.setMinDate(minCal.getTimeInMillis());
+     picker.updateDate(minCal.get(Calendar.YEAR),
+             minCal.get(Calendar.MONTH),
+             minCal.get(Calendar.DAY_OF_MONTH));
+     picker.setMaxDate(maxCal.getTimeInMillis());
 
-        // While the widget is only able to display date, min/max can also contain time
-        // information.
-        // Trim min/max to date before adjusting the picker.
-        Calendar cal = Calendar.getInstance();
-        cal.clear();
-        cal.setTimeInMillis(max);
+     // Restore the current date, this will keep the min/max settings
+     // previously set into account.
+     picker.updateDate(currentYear, currentMonth, currentDayOfMonth);
+ }
 
-        picker.setMaxDate(trimToDate(maxTime));
-        picker.setMinDate(trimToDate(minTime));
-    }
-
-    /**
-     * Resets the hour, minute, second piece of a time stamp to 0, maintaining the remaining
-     * components (year, month, day).
-     */
-    private static long trimToDate(long time) {
-        Calendar cal = Calendar.getInstance();
+    private static Calendar trimToDate(long time) {
+        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         cal.clear();
         cal.setTimeInMillis(time);
-        Calendar result = Calendar.getInstance();
+        Calendar result = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         result.clear();
         result.set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH),
                 0, 0, 0);
-        return result.getTimeInMillis();
+        return result;
     }
 
     /**
@@ -53,7 +58,7 @@ class DateDialogNormalizer {
      */
     static void normalize(DatePicker picker, OnDateChangedListener listener,
             int year, int month, int day, int hour, int minute, long min, long max) {
-        Calendar calendar = Calendar.getInstance();
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
         calendar.clear();
         calendar.set(year, month, day, hour, minute, 0);
         if (calendar.getTimeInMillis() < min) {

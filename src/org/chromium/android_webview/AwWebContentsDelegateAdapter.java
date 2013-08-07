@@ -85,7 +85,7 @@ class AwWebContentsDelegateAdapter extends AwWebContentsDelegate {
     }
 
     @Override
-    public void openNewTab(String url, boolean incognito) {
+    public void openNewTab(String url, String extraHeaders, byte[] postData, boolean incognito) {
         // TODO: implement
     }
 

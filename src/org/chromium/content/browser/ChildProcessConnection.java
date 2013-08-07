@@ -34,8 +34,40 @@ import org.chromium.content.common.TraceEvent;
  * the service when it is in active use (between calls to attachAsActive() and detachAsActive()).
  */
 public class ChildProcessConnection {
+    /**
+     * Used to notify the consumer about disconnection of the service. This callback is provided
+     * earlier than ConnectionCallbacks below, as a child process might die before the connection is
+     * fully set up.
+     */
     interface DeathCallback {
         void onChildProcessDied(int pid);
+    }
+
+    /**
+     * Used to notify the consumer about the connection being established and about out-of-memory
+     * bindings being bound for the connection. "Out-of-memory" bindings are bindings that raise the
+     * priority of the service process so that it does not get killed by the OS out-of-memory killer
+     * during normal operation (yet it still may get killed under drastic memory pressure).
+     */
+    interface ConnectionCallbacks {
+        /**
+         * Called when the connection to the service is established. It will be called before any
+         * calls to onOomBindingsAdded(), onOomBindingRemoved().
+         * @param pid Pid of the child process.
+         * @param oomBindingCount Number of the out-of-memory bindings bound before the connection
+         * was established.
+         */
+        void onConnected(int pid, int oomBindingCount);
+
+        /**
+         * Called when a new out-of-memory binding is bound.
+         */
+        void onOomBindingAdded(int pid);
+
+        /**
+         * Called when an out-of-memory binding is unbound.
+         */
+        void onOomBindingRemoved(int pid);
     }
 
     // Names of items placed in the bind intent or connection bundle.
@@ -68,6 +100,9 @@ public class ChildProcessConnection {
     private IChildProcessService mService = null;
     // Set to true when the service connect is finished, even if it fails.
     private boolean mServiceConnectComplete = false;
+    // Set to true when the service disconnects, as opposed to being properly closed. This happens
+    // when the process crashes or gets killed by the system out-of-memory killer.
+    private boolean mServiceDisconnected = false;
     private int mPID = 0;  // Process ID of the corresponding child process.
     // Initial binding protects the newly spawned process from being killed before it is put to use,
     // it is maintained between calls to start() and removeInitialBinding().
@@ -89,17 +124,12 @@ public class ChildProcessConnection {
         final String[] mCommandLine;
         final FileDescriptorInfo[] mFilesToBeMapped;
         final IChildProcessCallback mCallback;
-        final Runnable mOnConnectionCallback;
 
-        ConnectionParams(
-                String[] commandLine,
-                FileDescriptorInfo[] filesToBeMapped,
-                IChildProcessCallback callback,
-                Runnable onConnectionCallback) {
+        ConnectionParams(String[] commandLine, FileDescriptorInfo[] filesToBeMapped,
+                IChildProcessCallback callback) {
             mCommandLine = commandLine;
             mFilesToBeMapped = filesToBeMapped;
             mCallback = callback;
-            mOnConnectionCallback = onConnectionCallback;
         }
     }
 
@@ -108,13 +138,19 @@ public class ChildProcessConnection {
     // the connection is being set up.
     private ConnectionParams mConnectionParams;
 
+    // Callbacks used to notify the consumer about connection events. This is also provided in
+    // setupConnection(), but remains valid after setup.
+    private ChildProcessConnection.ConnectionCallbacks mConnectionCallbacks;
+
     private class ChildServiceConnection implements ServiceConnection {
         private boolean mBound = false;
 
         private final int mBindFlags;
+        private final boolean mProtectsFromOom;
 
-        public ChildServiceConnection(int bindFlags) {
+        public ChildServiceConnection(int bindFlags, boolean protectsFromOom) {
             mBindFlags = bindFlags;
+            mProtectsFromOom = protectsFromOom;
         }
 
         boolean bind(String[] commandLine) {
@@ -124,6 +160,9 @@ public class ChildProcessConnection {
                     intent.putExtra(EXTRA_COMMAND_LINE, commandLine);
                 }
                 mBound = mContext.bindService(intent, this, mBindFlags);
+                if (mBound && mProtectsFromOom && mConnectionCallbacks != null) {
+                    mConnectionCallbacks.onOomBindingAdded(getPid());
+                }
             }
             return mBound;
         }
@@ -132,7 +171,17 @@ public class ChildProcessConnection {
             if (mBound) {
                 mContext.unbindService(this);
                 mBound = false;
+                // When the process crashes, we stop reporting bindings being unbound (so that their
+                // numbers can be inspected to determine if the process crash could be caused by the
+                // out-of-memory killing), hence the mServiceDisconnected check below.
+                if (mProtectsFromOom && mConnectionCallbacks != null && !mServiceDisconnected) {
+                    mConnectionCallbacks.onOomBindingRemoved(getPid());
+                }
             }
+        }
+
+        boolean isBound() {
+            return mBound;
         }
 
         @Override
@@ -146,6 +195,8 @@ public class ChildProcessConnection {
                 TraceEvent.begin();
                 mServiceConnectComplete = true;
                 mService = IChildProcessService.Stub.asInterface(service);
+                // Make sure that the connection parameters have already been provided. If not,
+                // doConnectionSetup() will be called from setupConnection().
                 if (mConnectionParams != null) {
                     doConnectionSetup();
                 }
@@ -159,19 +210,20 @@ public class ChildProcessConnection {
         public void onServiceDisconnected(ComponentName className) {
             // Ensure that the disconnection logic runs only once (instead of once per each
             // ChildServiceConnection).
-            if (mService == null) {
+            if (mServiceDisconnected) {
                 return;
             }
-            int pid = mPID;  // Stash pid & connection callback since stop() will clear them.
-            Runnable onConnectionCallback =
-                mConnectionParams != null ? mConnectionParams.mOnConnectionCallback : null;
+            mServiceDisconnected = true;
+            int pid = mPID;  // Stash the pid for DeathCallback since stop() will clear it.
+            boolean disconnectedWhileBeingSetUp = mConnectionParams != null;
             Log.w(TAG, "onServiceDisconnected (crash or killed by oom): pid=" + pid);
             stop();  // We don't want to auto-restart on crash. Let the browser do that.
             if (pid != 0) {
                 mDeathCallback.onChildProcessDied(pid);
             }
-            if (onConnectionCallback != null) {
-                onConnectionCallback.run();
+            // TODO(ppi): does anyone know why we need to do that?
+            if (disconnectedWhileBeingSetUp && mConnectionCallbacks != null) {
+                mConnectionCallbacks.onConnected(0, 0);
             }
         }
     }
@@ -184,11 +236,11 @@ public class ChildProcessConnection {
         mInSandbox = inSandbox;
         mDeathCallback = deathCallback;
         mServiceClass = serviceClass;
-        mInitialBinding = new ChildServiceConnection(Context.BIND_AUTO_CREATE);
+        mInitialBinding = new ChildServiceConnection(Context.BIND_AUTO_CREATE, true);
         mStrongBinding = new ChildServiceConnection(
-                Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT);
+                Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT, true);
         mWaivedBinding = new ChildServiceConnection(
-                Context.BIND_AUTO_CREATE | Context.BIND_WAIVE_PRIORITY);
+                Context.BIND_AUTO_CREATE | Context.BIND_WAIVE_PRIORITY, false);
     }
 
     int getServiceNumber() {
@@ -240,18 +292,21 @@ public class ChildProcessConnection {
      * @param commandLine (Optional) will be ignored if the command line was already sent in bind()
      * @param fileToBeMapped a list of file descriptors that should be registered
      * @param callback Used for status updates regarding this process connection.
-     * @param onConnectionCallback will be run when the connection is setup and ready to use.
+     * @param connectionCallbacks will notify the consumer about the connection being established
+     * and the status of the out-of-memory bindings being bound for the connection.
      */
     void setupConnection(
             String[] commandLine,
             FileDescriptorInfo[] filesToBeMapped,
-            IChildProcessCallback callback,
-            Runnable onConnectionCallback) {
+            IChildProcessCallback processCallback,
+            ConnectionCallbacks connectionCallbacks) {
         synchronized(mUiThreadLock) {
             TraceEvent.begin();
             assert mConnectionParams == null;
-            mConnectionParams = new ConnectionParams(commandLine, filesToBeMapped, callback,
-                    onConnectionCallback);
+            mConnectionCallbacks = connectionCallbacks;
+            mConnectionParams = new ConnectionParams(commandLine, filesToBeMapped, processCallback);
+            // Make sure that the service is already connected. If not, doConnectionSetup() will be
+            // called from onServiceConnected().
             if (mServiceConnectComplete) {
                 doConnectionSetup();
             }
@@ -287,18 +342,16 @@ public class ChildProcessConnection {
     }
 
     /**
-     * Called when the connection parameters have been set, and a connection has been established
-     * (as signaled by onServiceConnected), or if the connection failed (as signaled by
-     * onBindFailed), in which case mService will be false.
+     * Called after the connection parameters have been set (in setupConnection()) *and* a
+     * connection has been established (as signaled by onServiceConnected()) or failed (as signaled
+     * by onBindFailed(), in this case mService will be null). These two events can happen in any
+     * order.
      */
     private void doConnectionSetup() {
         TraceEvent.begin();
         assert mServiceConnectComplete && mConnectionParams != null;
-        // Capture the callback before it is potentially nulled in unbind().
-        Runnable onConnectionCallback = mConnectionParams.mOnConnectionCallback;
-        if (onConnectionCallback == null) {
-            stop();
-        } else if (mService != null) {
+
+        if (mService != null) {
             Bundle bundle = new Bundle();
             bundle.putStringArray(EXTRA_COMMAND_LINE, mConnectionParams.mCommandLine);
 
@@ -339,7 +392,7 @@ public class ChildProcessConnection {
             } catch (android.os.RemoteException re) {
                 Log.e(TAG, "Failed to setup connection.", re);
             }
-            // We proactivley close the FDs rather than wait for GC & finalizer.
+            // We proactively close the FDs rather than wait for GC & finalizer.
             try {
                 for (ParcelFileDescriptor parcelFile : parcelFiles) {
                     if (parcelFile != null) parcelFile.close();
@@ -349,20 +402,39 @@ public class ChildProcessConnection {
             }
         }
         mConnectionParams = null;
-        if (onConnectionCallback != null) {
-            onConnectionCallback.run();
+
+        if (mConnectionCallbacks != null) {
+            // Number of out-of-memory bindings bound before the connection was set up.
+            int oomBindingCount =
+                    (mInitialBinding.isBound() ? 1 : 0) + (mStrongBinding.isBound() ? 1 : 0);
+            mConnectionCallbacks.onConnected(getPid(), oomBindingCount);
         }
         TraceEvent.end();
     }
 
+    private static final long REMOVE_INITIAL_BINDING_DELAY_MILLIS = 1 * 1000;  // One second.
+
     /**
      * Called to remove the strong binding estabilished when the connection was started. It is safe
-     * to call this multiple times.
+     * to call this multiple times. The binding is removed after a fixed delay period so that the
+     * renderer will not be killed immediately after the call.
      */
     void removeInitialBinding() {
         synchronized(mUiThreadLock) {
-            mInitialBinding.unbind();
+            if (!mInitialBinding.isBound()) {
+                // While it is safe to post and execute the unbinding multiple times, we prefer to
+                // avoid spamming the message queue.
+                return;
+            }
         }
+        ThreadUtils.postOnUiThreadDelayed(new Runnable() {
+            @Override
+            public void run() {
+                synchronized(mUiThreadLock) {
+                    mInitialBinding.unbind();
+                }
+            }
+        }, REMOVE_INITIAL_BINDING_DELAY_MILLIS);
     }
 
     /**
@@ -384,28 +456,35 @@ public class ChildProcessConnection {
         }
     }
 
+    private static final long DETACH_AS_ACTIVE_DELAY_MILLIS = 5 * 1000;  // Five seconds.
+
     /**
-     * Called when the service is no longer considered active.
+     * Called when the service is no longer considered active. Actual binding is removed after a
+     * fixed delay period so that the renderer will not be killed immediately after the call.
      */
     void detachAsActive() {
-        synchronized(mUiThreadLock) {
-            assert mAttachAsActiveCount > 0;
-            if (mService == null) {
-                Log.w(TAG, "The connection is not bound for " + mPID);
-                return;
+        ThreadUtils.postOnUiThreadDelayed(new Runnable() {
+            @Override
+            public void run() {
+                synchronized(mUiThreadLock) {
+                    if (mService == null) {
+                        Log.w(TAG, "The connection is not bound for " + mPID);
+                        return;
+                    }
+                    assert mAttachAsActiveCount > 0;
+                    mAttachAsActiveCount--;
+                    if (mAttachAsActiveCount == 0) {
+                        mStrongBinding.unbind();
+                    }
+                }
             }
-            mAttachAsActiveCount--;
-            if (mAttachAsActiveCount == 0) {
-                mStrongBinding.unbind();
-            }
-        }
+        }, DETACH_AS_ACTIVE_DELAY_MILLIS);
     }
-
 
     /**
      * @return The connection PID, or 0 if not yet connected.
      */
-    public int getPid() {
+    int getPid() {
         synchronized(mUiThreadLock) {
             return mPID;
         }

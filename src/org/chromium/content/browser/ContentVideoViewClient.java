@@ -30,12 +30,6 @@ public interface ContentVideoViewClient {
     public void onDestroyContentVideoView();
 
     /**
-     * Hints the embedder to prevent or allow the screen timeout. Optional to implement.
-     * @param screenOn indicates if the screen should be kept on or off.
-     */
-    public void keepScreenOn(boolean screenOn);
-
-    /**
      * Allows the embedder to replace the view indicating that the video is loading.
      * If null is returned, the default video loading view is used.
      */

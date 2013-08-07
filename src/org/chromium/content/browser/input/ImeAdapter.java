@@ -48,7 +48,6 @@ public class ImeAdapter {
         void onDismissInput();
         View getAttachedView();
         ResultReceiver getNewShowKeyboardReceiver();
-        void hideSelectionAndInsertionHandles();
     }
 
     private class DelayedDismissInput implements Runnable {
@@ -198,10 +197,6 @@ public class ImeAdapter {
         return modifiers;
     }
 
-    void hideSelectionAndInsertionHandleControllers() {
-        mViewEmbedder.hideSelectionAndInsertionHandles();
-    }
-
     public boolean isActive() {
         return mInputConnection != null && mInputConnection.isActive();
     }
@@ -251,7 +246,9 @@ public class ImeAdapter {
         mTextInputType = textInputType;
         mInitialSelectionStart = selectionStart;
         mInitialSelectionEnd = selectionEnd;
-        nativeAttachImeAdapter(mNativeImeAdapterAndroid);
+        if (nativeImeAdapter != 0) {
+            nativeAttachImeAdapter(mNativeImeAdapterAndroid);
+        }
     }
 
     /**
@@ -342,9 +339,6 @@ public class ImeAdapter {
 
         // Committing an empty string finishes the current composition.
         boolean isFinish = text.isEmpty();
-        if (!isFinish) {
-            mViewEmbedder.hideSelectionAndInsertionHandles();
-        }
         mViewEmbedder.onImeEvent(isFinish);
         int keyCode = shouldSendKeyEventWithKeyCode(text);
         long timeStampMs = System.currentTimeMillis();
@@ -365,6 +359,10 @@ public class ImeAdapter {
         }
 
         return true;
+    }
+
+    void finishComposingText() {
+        nativeFinishComposingText(mNativeImeAdapterAndroid);
     }
 
     boolean translateAndSendNativeEvents(KeyEvent event) {
@@ -547,6 +545,8 @@ public class ImeAdapter {
             int newCursorPosition);
 
     private native void nativeCommitText(int nativeImeAdapterAndroid, String text);
+
+    private native void nativeFinishComposingText(int nativeImeAdapterAndroid);
 
     private native void nativeAttachImeAdapter(int nativeImeAdapterAndroid);
 

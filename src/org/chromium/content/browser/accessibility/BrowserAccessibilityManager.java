@@ -34,7 +34,7 @@ import java.util.List;
  */
 @JNINamespace("content")
 public class BrowserAccessibilityManager {
-    private static final String TAG = BrowserAccessibilityManager.class.getSimpleName();
+    private static final String TAG = "BrowserAccessibilityManager";
 
     private ContentViewCore mContentViewCore;
     private AccessibilityManager mAccessibilityManager;

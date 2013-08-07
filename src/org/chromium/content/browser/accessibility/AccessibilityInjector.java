@@ -40,7 +40,7 @@ import java.util.List;
  * Responsible for accessibility injection and management of a {@link ContentViewCore}.
  */
 public class AccessibilityInjector extends WebContentsObserverAndroid {
-    private static final String TAG = AccessibilityInjector.class.getSimpleName();
+    private static final String TAG = "AccessibilityInjector";
 
     // The ContentView this injector is responsible for managing.
     protected ContentViewCore mContentViewCore;

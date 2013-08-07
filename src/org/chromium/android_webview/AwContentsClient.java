@@ -52,6 +52,12 @@ public abstract class AwContentsClient {
 
     private double mDIPScale;
 
+    // Last background color reported from the renderer. Holds the sentinal value INVALID_COLOR
+    // if not valid.
+    private int mCachedRendererBackgroundColor = INVALID_COLOR;
+
+    private static final int INVALID_COLOR = 0;
+
     class AwWebContentsObserver extends WebContentsObserverAndroid {
         public AwWebContentsObserver(ContentViewCore contentViewCore) {
             super(contentViewCore);
@@ -90,6 +96,12 @@ public abstract class AwContentsClient {
     }
 
     private class AwContentViewClient extends ContentViewClient {
+        @Override
+        public void onBackgroundColorChanged(int color) {
+            // Avoid storing the sentinal INVALID_COLOR (note that both 0 and 1 are both
+            // fully transparent so this transpose makes no visible difference).
+            mCachedRendererBackgroundColor = color == INVALID_COLOR ? 1 : color;
+        }
 
         @Override
         public void onScaleChanged(float oldScale, float newScale) {
@@ -104,7 +116,7 @@ public abstract class AwContentsClient {
         }
 
         @Override
-        public void onTabCrash() {
+        public void onRendererCrash(boolean crashedWhileOomProtected) {
             // This is not possible so long as the webview is run single process!
             throw new RuntimeException("Renderer crash reported.");
         }
@@ -157,10 +169,6 @@ public abstract class AwContentsClient {
         }
 
         @Override
-        public void keepScreenOn(boolean screenOn) {
-        }
-
-        @Override
         public ContentVideoViewControls createControls() {
             return null;
         }
@@ -176,6 +184,15 @@ public abstract class AwContentsClient {
 
     final ContentViewClient getContentViewClient() {
         return mContentViewClient;
+    }
+
+    final int getCachedRendererBackgroundColor() {
+        assert isCachedRendererBackgroundColorValid();
+        return mCachedRendererBackgroundColor;
+    }
+
+    final boolean isCachedRendererBackgroundColorValid() {
+        return mCachedRendererBackgroundColor != INVALID_COLOR;
     }
 
     //--------------------------------------------------------------------------------------------

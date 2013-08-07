@@ -4,6 +4,10 @@
 
 package org.chromium.android_webview;
 
+import android.widget.OverScroller;
+
+import com.google.common.annotations.VisibleForTesting;
+
 import org.chromium.base.CalledByNative;
 
 /**
@@ -12,20 +16,24 @@ import org.chromium.base.CalledByNative;
  *
  * Unless otherwise values (sizes, scroll offsets) are in physical pixels.
  */
+@VisibleForTesting
 public class AwScrollOffsetManager {
     // The unit of all the values in this delegate are physical pixels.
     public interface Delegate {
         // Call View#overScrollBy on the containerView.
         void overScrollContainerViewBy(int deltaX, int deltaY, int scrollX, int scrollY,
-                int scrollRangeX, int scrollRangeY);
+                int scrollRangeX, int scrollRangeY, boolean isTouchEvent);
         // Call View#scrollTo on the containerView.
         void scrollContainerViewTo(int x, int y);
         // Store the scroll offset in the native side. This should really be a simple store
         // operation, the native side shouldn't synchronously alter the scroll offset from within
         // this call.
         void scrollNativeTo(int x, int y);
+
         int getContainerViewScrollX();
         int getContainerViewScrollY();
+
+        void invalidate();
     }
 
     private final Delegate mDelegate;
@@ -42,8 +50,24 @@ public class AwScrollOffsetManager {
     private int mContainerViewWidth;
     private int mContainerViewHeight;
 
-    public AwScrollOffsetManager(Delegate delegate) {
+    // Whether we're in the middle of processing a touch event.
+    private boolean mProcessingTouchEvent;
+
+    // Whether (and to what value) to update the native side scroll offset after we've finished
+    // provessing a touch event.
+    private boolean mApplyDeferredNativeScroll;
+    private int mDeferredNativeScrollX;
+    private int mDeferredNativeScrollY;
+
+    // The velocity of the last recorded fling,
+    private int mLastFlingVelocityX;
+    private int mLastFlingVelocityY;
+
+    private OverScroller mScroller;
+
+    public AwScrollOffsetManager(Delegate delegate, OverScroller overScroller) {
         mDelegate = delegate;
+        mScroller = overScroller;
     }
 
     //----- Scroll range and extent calculation methods -------------------------------------------
@@ -98,6 +122,16 @@ public class AwScrollOffsetManager {
                 mDelegate.getContainerViewScrollY());
     }
 
+    public void setProcessingTouchEvent(boolean processingTouchEvent) {
+        assert mProcessingTouchEvent != processingTouchEvent;
+        mProcessingTouchEvent = processingTouchEvent;
+
+        if (!mProcessingTouchEvent && mApplyDeferredNativeScroll) {
+            mApplyDeferredNativeScroll = false;
+            scrollNativeTo(mDeferredNativeScrollX, mDeferredNativeScrollY);
+        }
+    }
+
     // Called by the native side to attempt to scroll the container view.
     public void scrollContainerViewTo(int x, int y) {
         mNativeScrollX = x;
@@ -113,18 +147,31 @@ public class AwScrollOffsetManager {
         // We use overScrollContainerViewBy to be compatible with WebViewClassic which used this
         // method for handling both over-scroll as well as in-bounds scroll.
         mDelegate.overScrollContainerViewBy(deltaX, deltaY, scrollX, scrollY,
-                scrollRangeX, scrollRangeY);
+                scrollRangeX, scrollRangeY, mProcessingTouchEvent);
     }
 
     // Called by the native side to over-scroll the container view.
-    public void overscrollBy(int deltaX, int deltaY) {
+    public void overScrollBy(int deltaX, int deltaY) {
+        // TODO(mkosiba): Once http://crbug.com/260663 and http://crbug.com/261239 are fixed it
+        // should be possible to uncomment the following asserts:
+        // if (deltaX < 0) assert mDelegate.getContainerViewScrollX() == 0;
+        // if (deltaX > 0) assert mDelegate.getContainerViewScrollX() ==
+        //          computeMaximumHorizontalScrollOffset();
+        scrollBy(deltaX, deltaY);
+    }
+
+    private void scrollBy(int deltaX, int deltaY) {
+        if (deltaX == 0 && deltaY == 0) return;
+
         final int scrollX = mDelegate.getContainerViewScrollX();
         final int scrollY = mDelegate.getContainerViewScrollY();
         final int scrollRangeX = computeMaximumHorizontalScrollOffset();
         final int scrollRangeY = computeMaximumVerticalScrollOffset();
 
+        // The android.view.View.overScrollBy method is used for both scrolling and over-scrolling
+        // which is why we use it here.
         mDelegate.overScrollContainerViewBy(deltaX, deltaY, scrollX, scrollY,
-                scrollRangeX, scrollRangeY);
+                scrollRangeX, scrollRangeY, mProcessingTouchEvent);
     }
 
     private int clampHorizontalScroll(int scrollX) {
@@ -147,7 +194,8 @@ public class AwScrollOffsetManager {
         scrollY = clampVerticalScroll(scrollY);
 
         mDelegate.scrollContainerViewTo(scrollX, scrollY);
-        // This will only do anything if the containerView scroll offset ends up being different
+
+        // This is only necessary if the containerView scroll offset ends up being different
         // than the one set from native in which case we want the value stored on the native side
         // to reflect the value stored in the containerView (and not the other way around).
         scrollNativeTo(mDelegate.getContainerViewScrollX(), mDelegate.getContainerViewScrollY());
@@ -165,6 +213,15 @@ public class AwScrollOffsetManager {
         x = clampHorizontalScroll(x);
         y = clampVerticalScroll(y);
 
+        // We shouldn't do the store to native while processing a touch event since that confuses
+        // the gesture processing logic.
+        if (mProcessingTouchEvent) {
+            mDeferredNativeScrollX = x;
+            mDeferredNativeScrollY = y;
+            mApplyDeferredNativeScroll = true;
+            return;
+        }
+
         if (x == mNativeScrollX && y == mNativeScrollY)
             return;
 
@@ -174,5 +231,63 @@ public class AwScrollOffsetManager {
         mNativeScrollY = y;
 
         mDelegate.scrollNativeTo(x, y);
+    }
+
+    // Called at the beginning of every fling gesture.
+    public void onFlingStartGesture(int velocityX, int velocityY) {
+        mLastFlingVelocityX = velocityX;
+        mLastFlingVelocityY = velocityY;
+    }
+
+    // Called whenever some other touch interaction requires the fling gesture to be canceled.
+    public void onFlingCancelGesture() {
+        // TODO(mkosiba): Support speeding up a fling by flinging again.
+        // http://crbug.com/265841
+        mScroller.forceFinished(true);
+    }
+
+    // Called when a fling gesture is not handled by the renderer.
+    // We explicitly ask the renderer not to handle fling gestures targeted at the root
+    // scroll layer.
+    public void onUnhandledFlingStartEvent() {
+        flingScroll(-mLastFlingVelocityX, -mLastFlingVelocityY);
+    }
+
+    // Starts the fling animation. Called both as a response to a fling gesture and as via the
+    // public WebView#flingScroll(int, int) API.
+    public void flingScroll(int velocityX, int velocityY) {
+        final int scrollX = mDelegate.getContainerViewScrollX();
+        final int scrollY = mDelegate.getContainerViewScrollY();
+        final int rangeX = computeMaximumHorizontalScrollOffset();
+        final int rangeY = computeMaximumVerticalScrollOffset();
+
+        mScroller.fling(scrollX, scrollY, velocityX, velocityY,
+                0, rangeX, 0, rangeY);
+        mDelegate.invalidate();
+    }
+
+    // Called immediately before the draw to update the scroll offset.
+    public void computeScrollAndAbsorbGlow(OverScrollGlow overScrollGlow) {
+        final boolean stillAnimating = mScroller.computeScrollOffset();
+        if (!stillAnimating) return;
+
+        final int oldX = mDelegate.getContainerViewScrollX();
+        final int oldY = mDelegate.getContainerViewScrollY();
+        int x = mScroller.getCurrX();
+        int y = mScroller.getCurrY();
+
+        int rangeX = computeMaximumHorizontalScrollOffset();
+        int rangeY = computeMaximumVerticalScrollOffset();
+
+        if (overScrollGlow != null) {
+            overScrollGlow.absorbGlow(x, y, oldX, oldY, rangeX, rangeY,
+                    mScroller.getCurrVelocity());
+        }
+
+        // The mScroller is configured not to go outside of the scrollable range, so this call
+        // should never result in attempting to scroll outside of the scrollable region.
+        scrollBy(x - oldX, y - oldY);
+
+        mDelegate.invalidate();
     }
 }

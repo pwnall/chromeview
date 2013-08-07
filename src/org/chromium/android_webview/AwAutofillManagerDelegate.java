@@ -7,12 +7,10 @@ package org.chromium.android_webview;
 import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AbsoluteLayout;
 
 import org.chromium.base.CalledByNative;
 import org.chromium.base.JNINamespace;
 import org.chromium.content.browser.ContentViewCore;
-import org.chromium.ui.ViewAndroidDelegate;
 import org.chromium.ui.autofill.AutofillPopup;
 import org.chromium.ui.autofill.AutofillSuggestion;
 
@@ -24,7 +22,6 @@ public class AwAutofillManagerDelegate {
     private final int mNativeAwAutofillManagerDelegate;
     private AutofillPopup mAutofillPopup;
     private ViewGroup mContainerView;
-    private double mDIPScale;
     private ContentViewCore mContentViewCore;
 
     @CalledByNative
@@ -36,10 +33,9 @@ public class AwAutofillManagerDelegate {
         mNativeAwAutofillManagerDelegate = nativeAwAutofillManagerDelegate;
     }
 
-    public void init(ContentViewCore contentViewCore, double DIPScale) {
+    public void init(ContentViewCore contentViewCore) {
         mContentViewCore = contentViewCore;
         mContainerView = contentViewCore.getContainerView();
-        mDIPScale = DIPScale;
     }
 
     @CalledByNative
@@ -51,7 +47,7 @@ public class AwAutofillManagerDelegate {
         if (mAutofillPopup == null) {
             mAutofillPopup = new AutofillPopup(
                 mContentViewCore.getContext(),
-                getViewAndroidDelegate(),
+                mContentViewCore.getViewAndroidDelegate(),
                 new AutofillPopup.AutofillPopupDelegate() {
                     public void requestHide() { }
                     public void suggestionSelected(int listIndex) {
@@ -69,36 +65,6 @@ public class AwAutofillManagerDelegate {
             return;
         mAutofillPopup.hide();
         mAutofillPopup = null;
-    }
-
-    private ViewAndroidDelegate getViewAndroidDelegate() {
-        return new ViewAndroidDelegate() {
-            @Override
-            public View acquireAnchorView() {
-                View anchorView = new View(mContentViewCore.getContext());
-                mContainerView.addView(anchorView);
-                return anchorView;
-            }
-
-            @Override
-            public void setAnchorViewPosition(
-                    View view, float x, float y, float width, float height) {
-                assert(view.getParent() == mContainerView);
-
-                int leftMargin = (int)Math.round(x * mDIPScale);
-                int topMargin = (int)mContentViewCore.getRenderCoordinates().getContentOffsetYPix()
-                        + (int)Math.round(y * mDIPScale);
-
-                AbsoluteLayout.LayoutParams lp = new AbsoluteLayout.LayoutParams((int)width,
-                        (int)height, leftMargin, topMargin);
-                view.setLayoutParams(lp);
-            }
-
-            @Override
-            public void releaseAnchorView(View anchorView) {
-                mContainerView.removeView(anchorView);
-            }
-        };
     }
 
     @CalledByNative

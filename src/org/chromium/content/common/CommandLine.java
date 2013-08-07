@@ -70,6 +70,9 @@ public abstract class CommandLine {
     // Native switch - chrome_switches::kEnableInstantExtendedAPI
     public static final String ENABLE_INSTANT_EXTENDED_API = "enable-instant-extended-api";
 
+    // Native switch - content_switches::kEnableSpeechRecognition
+    public static final String ENABLE_SPEECH_RECOGNITION = "enable-speech-recognition";
+
     // Public abstract interface, implemented in derived classes.
     // All these methods reflect their native-side counterparts.
     /**
@@ -162,16 +165,9 @@ public abstract class CommandLine {
      * @param file The fully qualified command line file.
      */
     public static void initFromFile(String file) {
-        char[] buffer = new char[0];
-        try {
-            // Arbitrary clamp of 8k on the amount of file we read in.
-            buffer = readUtf8FileFully(file, 8 * 1024);
-        } catch (FileNotFoundException e) {
-            // Ignore: having a command line file is optional.
-        } catch (IOException e) {
-            Log.w(TAG, "error reading command line file " + file + e);
-        }
-        init(tokenizeQuotedAruments(buffer));
+        // Arbitrary clamp of 8k on the amount of file we read in.
+        char[] buffer = readUtf8FileFully(file, 8 * 1024);
+        init(buffer == null ? null : tokenizeQuotedAruments(buffer));
     }
 
     /**
@@ -257,29 +253,43 @@ public abstract class CommandLine {
 
     /**
      * @param fileName the file to read in.
-     * @param sizeLimit cap on the file size: will throw an exception if exceeded
-     * @return Array of chars read from the file
-     * @throws FileNotFoundException file does not exceed
-     * @throws IOException error encountered accessing the file
+     * @param sizeLimit cap on the file size.
+     * @return Array of chars read from the file, or null if the file cannot be read
+     *         or if its length exceeds |sizeLimit|.
      */
-    private static char[] readUtf8FileFully(String fileName, int sizeLimit) throws
-            FileNotFoundException, IOException {
+    private static char[] readUtf8FileFully(String fileName, int sizeLimit) {
         Reader reader = null;
+        File f = new File(fileName);
+        long fileLength = f.length();
+
+        if (fileLength == 0) {
+            return null;
+        }
+
+        if (fileLength > sizeLimit) {
+            Log.w(TAG, "File " + fileName + " length " + fileLength + " exceeds limit "
+                    + sizeLimit);
+            return null;
+        }
+
         try {
-            File f = new File(fileName);
-            if (f.length() > sizeLimit) {
-                throw new IOException("File " + fileName + " length " + f.length() +
-                        " exceeds limit " + sizeLimit);
-            }
-            char[] buffer = new char[(int) f.length()];
+            char[] buffer = new char[(int) fileLength];
             reader = new InputStreamReader(new FileInputStream(f), "UTF-8");
             int charsRead = reader.read(buffer);
             // Debug check that we've exhausted the input stream (will fail e.g. if the
             // file grew after we inspected its length).
             assert !reader.ready();
             return charsRead < buffer.length ? Arrays.copyOfRange(buffer, 0, charsRead) : buffer;
+        } catch (FileNotFoundException e) {
+            return null;
+        } catch (IOException e) {
+            return null;
         } finally {
-            if (reader != null) reader.close();
+            try {
+                if (reader != null) reader.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Unable to close file reader.", e);
+            }
         }
     }
 

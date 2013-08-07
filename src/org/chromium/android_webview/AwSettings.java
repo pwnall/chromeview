@@ -4,9 +4,11 @@
 
 package org.chromium.android_webview;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.provider.Settings;
 import android.webkit.WebSettings.PluginState;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -81,6 +83,8 @@ public class AwSettings {
     private float mInitialPageScalePercent = 0;
 
     private final boolean mSupportDeprecatedTargetDensityDPI = true;
+
+    private final boolean mPasswordEchoEnabled;
 
     // Not accessed by the native side.
     private boolean mBlockNetworkLoads;  // Default depends on permission of embedding APK.
@@ -168,7 +172,7 @@ public class AwSettings {
         public void onMultiTouchZoomSupportChanged(boolean supportsMultiTouchZoom);
     }
 
-    public AwSettings(boolean hasInternetPermission,
+    public AwSettings(Context context, boolean hasInternetPermission,
             ZoomSupportChangeListener zoomChangeListener,
             boolean isAccessFromFileURLsGrantedByDefault,
             double dipScale) {
@@ -187,6 +191,10 @@ public class AwSettings {
 
             mUserAgent = LazyDefaultUserAgent.sInstance;
             onMultiTouchZoomSupportChanged(supportsMultiTouchZoomLocked());
+
+            // Respect the system setting for password echoing.
+            mPasswordEchoEnabled = Settings.System.getInt(context.getContentResolver(),
+                    Settings.System.TEXT_SHOW_PASSWORD, 1) == 1;
         }
         // Defer initializing the native side until a native WebContents instance is set.
     }
@@ -1053,6 +1061,11 @@ public class AwSettings {
     @CalledByNative
     private boolean getUseWideViewportLocked() {
         return mUseWideViewport;
+    }
+
+    @CalledByNative
+    private boolean getPasswordEchoEnabled() {
+        return mPasswordEchoEnabled;
     }
 
     /**

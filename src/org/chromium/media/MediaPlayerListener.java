@@ -133,10 +133,6 @@ class MediaPlayerListener implements MediaPlayer.OnPreparedListener,
         mediaPlayerBridge.setOnPreparedListener(listener);
         mediaPlayerBridge.setOnSeekCompleteListener(listener);
         mediaPlayerBridge.setOnVideoSizeChangedListener(listener);
-        if (PackageManager.PERMISSION_GRANTED ==
-                context.checkCallingOrSelfPermission(permission.WAKE_LOCK)) {
-            mediaPlayerBridge.setWakeMode(context, android.os.PowerManager.FULL_WAKE_LOCK);
-        }
 
         AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         am.requestAudioFocus(

@@ -48,7 +48,7 @@ public class WebContentsDelegateAndroid {
     }
 
     @CalledByNative
-    public void openNewTab(String url, boolean incognito) {
+    public void openNewTab(String url, String extraHeaders, byte[] postData, boolean incognito) {
     }
 
     @CalledByNative

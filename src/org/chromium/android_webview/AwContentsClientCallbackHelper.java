@@ -4,11 +4,14 @@
 
 package org.chromium.android_webview;
 
+import android.graphics.Picture;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 
 import org.chromium.content.browser.ContentViewCore;
+
+import java.util.concurrent.Callable;
 
 /**
  * This class is responsible for calling certain client callbacks on the UI thread.
@@ -70,6 +73,7 @@ class AwContentsClientCallbackHelper {
     private final static int MSG_ON_DOWNLOAD_START = 3;
     private final static int MSG_ON_RECEIVED_LOGIN_REQUEST = 4;
     private final static int MSG_ON_RECEIVED_ERROR = 5;
+    private final static int MSG_ON_NEW_PICTURE = 6;
 
     private final AwContentsClient mContentsClient;
 
@@ -102,6 +106,16 @@ class AwContentsClientCallbackHelper {
                     OnReceivedErrorInfo info = (OnReceivedErrorInfo) msg.obj;
                     mContentsClient.onReceivedError(info.mErrorCode, info.mDescription,
                             info.mFailingUrl);
+                    break;
+                }
+                case MSG_ON_NEW_PICTURE: {
+                    Picture picture = null;
+                    try {
+                        if (msg.obj != null) picture = (Picture) ((Callable<?>) msg.obj).call();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Error getting picture", e);
+                    }
+                    mContentsClient.onNewPicture(picture);
                     break;
                 }
                 default:
@@ -138,5 +152,9 @@ class AwContentsClientCallbackHelper {
     public void postOnReceivedError(int errorCode, String description, String failingUrl) {
         OnReceivedErrorInfo info = new OnReceivedErrorInfo(errorCode, description, failingUrl);
         mHandler.sendMessage(mHandler.obtainMessage(MSG_ON_RECEIVED_ERROR, info));
+    }
+
+    public void postOnNewPicture(Callable<Picture> pictureProvider) {
+        mHandler.sendMessage(mHandler.obtainMessage(MSG_ON_NEW_PICTURE, pictureProvider));
     }
 }

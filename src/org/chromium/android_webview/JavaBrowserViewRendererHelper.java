@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Picture;
+import android.util.Log;
 import android.util.LruCache;
 
 import org.chromium.base.CalledByNative;
@@ -19,6 +20,7 @@ import org.chromium.content.common.TraceEvent;
  */
 @JNINamespace("android_webview")
 public class JavaBrowserViewRendererHelper {
+    private static final String LOGTAG = "JavaBrowserViewRendererHelper";
 
     // Until the full HW path is ready, we limit to 5 AwContents on the screen at once.
     private static LruCache<Integer, Bitmap> sBitmapCache = new LruCache<Integer, Bitmap>(5);
@@ -39,7 +41,12 @@ public class JavaBrowserViewRendererHelper {
         }
         Bitmap bitmap = sBitmapCache.get(ownerKey);
         if (bitmap == null || bitmap.getWidth() != width || bitmap.getHeight() != height) {
-            bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            try {
+                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            } catch (OutOfMemoryError e) {
+                android.util.Log.w(LOGTAG, "Error allocating bitmap");
+                return null;
+            }
             if (ownerKey != 0) {
                 if (sBitmapCache.size() > AwContents.getNativeInstanceCount()) {
                     sBitmapCache.evictAll();
