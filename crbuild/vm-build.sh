@@ -9,7 +9,7 @@ cd ~/chromium/
 gclient sync --jobs 16
 cd ~/chromium/src
 
-if [ -f ~/.build_android ] ; then
+if [ -f ~/.build_arm ] ; then
   . build/android/envsetup.sh --target-arch=arm
   android_gyp
   ninja -C out/Release -k0 -j$CPUS libwebviewchromium android_webview_apk \
