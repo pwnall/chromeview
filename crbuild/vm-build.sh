@@ -2,7 +2,6 @@
 # Builds the Chromium bits needed by ChromeView.
 
 set -o errexit  # Stop the script on the first error.
-set -o nounset  # Catch un-initialized variables.
 
 cd ~/chromium/
 # https://code.google.com/p/chromium/wiki/UsingGit
