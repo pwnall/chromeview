@@ -1,4 +1,9 @@
+
+
+
+
 package org.chromium.net;
+
 public class NetError {
 public static final int ERR_IO_PENDING = -1;
 public static final int ERR_FAILED = -2;
@@ -74,6 +79,9 @@ public static final int ERR_SSL_BAD_PEER_PUBLIC_KEY = -149;
 public static final int ERR_SSL_PINNED_KEY_NOT_IN_CERT_CHAIN = -150;
 public static final int ERR_CLIENT_AUTH_CERT_TYPE_UNSUPPORTED = -151;
 public static final int ERR_ORIGIN_BOUND_CERT_GENERATION_TYPE_MISMATCH = -152;
+public static final int ERR_SSL_DECRYPT_ERROR_ALERT = -153;
+public static final int ERR_WS_THROTTLE_QUEUE_TOO_LARGE = -154;
+public static final int ERR_TOO_MANY_SOCKET_STREAMS = -155;
 public static final int ERR_CERT_COMMON_NAME_INVALID = -200;
 public static final int ERR_CERT_DATE_INVALID = -201;
 public static final int ERR_CERT_AUTHORITY_INVALID = -202;
@@ -129,6 +137,7 @@ public static final int ERR_PIPELINE_EVICTION = -353;
 public static final int ERR_CONTENT_LENGTH_MISMATCH = -354;
 public static final int ERR_INCOMPLETE_CHUNKED_ENCODING = -355;
 public static final int ERR_QUIC_PROTOCOL_ERROR = -356;
+public static final int ERR_RESPONSE_HEADERS_TRUNCATED = -357;
 public static final int ERR_CACHE_MISS = -400;
 public static final int ERR_CACHE_READ_FAILURE = -401;
 public static final int ERR_CACHE_WRITE_FAILURE = -402;
@@ -160,6 +169,7 @@ public static final int ERR_PKCS12_IMPORT_UNSUPPORTED = -709;
 public static final int ERR_KEY_GENERATION_FAILED = -710;
 public static final int ERR_ORIGIN_BOUND_CERT_GENERATION_FAILED = -711;
 public static final int ERR_PRIVATE_KEY_EXPORT_FAILED = -712;
+public static final int ERR_SELF_SIGNED_CERT_GENERATION_FAILED = -713;
 public static final int ERR_DNS_MALFORMED_RESPONSE = -800;
 public static final int ERR_DNS_SERVER_REQUIRES_TCP = -801;
 public static final int ERR_DNS_SERVER_FAILED = -802;

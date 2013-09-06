@@ -17,7 +17,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
 public class SslUtil {
-    private static final String TAG = SslUtil.class.getSimpleName();
+    private static final String TAG = "SslUtil";
 
     /**
      * Creates an SslError object from a chromium net error code.

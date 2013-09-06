@@ -1,4 +1,12 @@
+
+
+
+
 package org.chromium.base;
+
+
+
+
 interface ActivityState {
 public final int CREATED = 1;
 public final int STARTED = 2;

@@ -7,7 +7,6 @@ package org.chromium.content.browser.accessibility;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import org.chromium.content.browser.ContentViewCore;

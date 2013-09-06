@@ -1,0 +1,12 @@
+// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+package org.chromium.content.common;
+
+public class TopControlsState {
+#define DEFINE_TOP_CONTROLS_STATE(name, value) public static final int name = value;
+#include "content/public/common/top_controls_state_list.h"
+#undef DEFINE_TOP_CONTROLS_STATE
+}
+

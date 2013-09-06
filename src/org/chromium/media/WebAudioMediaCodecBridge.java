@@ -10,10 +10,11 @@ import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
+import java.io.File;
 import java.nio.ByteBuffer;
-import android.os.ParcelFileDescriptor;
 
 import org.chromium.base.CalledByNative;
 import org.chromium.base.JNINamespace;
@@ -25,6 +26,13 @@ class WebAudioMediaCodecBridge {
     // TODO(rtoy): What is the correct timeout value for reading
     // from a file in memory?
     static final long TIMEOUT_MICROSECONDS = 500;
+    @CalledByNative
+    private static String CreateTempFile(Context ctx) throws java.io.IOException {
+        File outputDirectory = ctx.getCacheDir();
+        File outputFile = File.createTempFile("webaudio", ".dat", outputDirectory);
+        return outputFile.getAbsolutePath();
+    }
+
     @CalledByNative
     private static boolean decodeAudioFile(Context ctx,
                                            int nativeMediaCodecBridge,

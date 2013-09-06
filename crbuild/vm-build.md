@@ -13,8 +13,8 @@ and building the files used in this library.
 
 These are the manual steps for setting up a VM. They only need to be done once.
 
-1. Get the 64-bit ISO for Ubuntu Server 12.10.
-    * Go to http://releases.ubuntu.com/12.10/
+1. Get the 64-bit ISO for Ubuntu Server precise (12.04*).
+    * Go to http://releases.ubuntu.com/precise/
     * Get the `64-bit PC (AMD64) server install image`
 
 2. Set up a VirtualBox VM.

@@ -27,7 +27,7 @@ import javax.net.ssl.X509TrustManager;
 
 public class X509Util {
 
-    private static final String TAG = X509Util.class.getName();
+    private static final String TAG = "X509Util";
 
     private static CertificateFactory sCertificateFactory;
 

@@ -4,8 +4,8 @@
 
 package org.chromium.android_webview;
 
-import android.content.pm.ActivityInfo;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Picture;
 import android.graphics.Rect;
@@ -23,6 +23,9 @@ import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 
+import org.chromium.content.browser.ContentVideoView;
+import org.chromium.content.browser.ContentVideoViewClient;
+import org.chromium.content.browser.ContentVideoViewControls;
 import org.chromium.content.browser.ContentViewClient;
 import org.chromium.content.browser.ContentViewCore;
 import org.chromium.content.browser.WebContentsObserverAndroid;
@@ -48,6 +51,12 @@ public abstract class AwContentsClient {
     private AwContentViewClient mContentViewClient = new AwContentViewClient();
 
     private double mDIPScale;
+
+    // Last background color reported from the renderer. Holds the sentinal value INVALID_COLOR
+    // if not valid.
+    private int mCachedRendererBackgroundColor = INVALID_COLOR;
+
+    private static final int INVALID_COLOR = 0;
 
     class AwWebContentsObserver extends WebContentsObserverAndroid {
         public AwWebContentsObserver(ContentViewCore contentViewCore) {
@@ -87,6 +96,12 @@ public abstract class AwContentsClient {
     }
 
     private class AwContentViewClient extends ContentViewClient {
+        @Override
+        public void onBackgroundColorChanged(int color) {
+            // Avoid storing the sentinal INVALID_COLOR (note that both 0 and 1 are both
+            // fully transparent so this transpose makes no visible difference).
+            mCachedRendererBackgroundColor = color == INVALID_COLOR ? 1 : color;
+        }
 
         @Override
         public void onScaleChanged(float oldScale, float newScale) {
@@ -101,7 +116,7 @@ public abstract class AwContentsClient {
         }
 
         @Override
-        public void onTabCrash() {
+        public void onRendererCrash(boolean crashedWhileOomProtected) {
             // This is not possible so long as the webview is run single process!
             throw new RuntimeException("Renderer crash reported.");
         }
@@ -116,6 +131,10 @@ public abstract class AwContentsClient {
             return AwContentsClient.this.shouldOverrideKeyEvent(event);
         }
 
+        @Override
+        final public ContentVideoViewClient getContentVideoViewClient() {
+            return new AwContentVideoViewClient();
+        }
     }
 
     final void installWebContentsObserver(ContentViewCore contentViewCore) {
@@ -123,6 +142,36 @@ public abstract class AwContentsClient {
             mWebContentsObserver.detachFromWebContents();
         }
         mWebContentsObserver = new AwWebContentsObserver(contentViewCore);
+    }
+
+    private class AwContentVideoViewClient implements ContentVideoViewClient {
+        @Override
+        public void onShowCustomView(View view) {
+            WebChromeClient.CustomViewCallback cb = new WebChromeClient.CustomViewCallback() {
+                @Override
+                public void onCustomViewHidden() {
+                    ContentVideoView contentVideoView = ContentVideoView.getContentVideoView();
+                    if (contentVideoView != null)
+                        contentVideoView.exitFullscreen(false);
+                }
+            };
+            AwContentsClient.this.onShowCustomView(view, cb);
+        }
+
+        @Override
+        public void onDestroyContentVideoView() {
+            AwContentsClient.this.onHideCustomView();
+        }
+
+        @Override
+        public View getVideoLoadingProgressView() {
+            return AwContentsClient.this.getVideoLoadingProgressView();
+        }
+
+        @Override
+        public ContentVideoViewControls createControls() {
+            return null;
+        }
     }
 
     final void setDIPScale(double dipScale) {
@@ -135,6 +184,15 @@ public abstract class AwContentsClient {
 
     final ContentViewClient getContentViewClient() {
         return mContentViewClient;
+    }
+
+    final int getCachedRendererBackgroundColor() {
+        assert isCachedRendererBackgroundColorValid();
+        return mCachedRendererBackgroundColor;
+    }
+
+    final boolean isCachedRendererBackgroundColorValid() {
+        return mCachedRendererBackgroundColor != INVALID_COLOR;
     }
 
     //--------------------------------------------------------------------------------------------

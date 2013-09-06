@@ -18,8 +18,8 @@ import java.util.concurrent.FutureTask;
 public class ThreadUtils {
 
     /**
-     * Run the supplied Runnable on the main thread. The method will block until
-     * the Runnable completes.
+     * Run the supplied Runnable on the main thread. The method will block until the Runnable
+     * completes.
      *
      * @param r The Runnable to run.
      */
@@ -38,8 +38,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Run the supplied Callable on the main thread, wrapping any exceptions in
-     * a RuntimeException. The method will block until the Callable completes.
+     * Run the supplied Callable on the main thread, wrapping any exceptions in a RuntimeException.
+     * The method will block until the Callable completes.
      *
      * @param c The Callable to run
      * @return The result of the callable
@@ -53,8 +53,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Run the supplied Callable on the main thread, The method will block until
-     * the Callable completes.
+     * Run the supplied Callable on the main thread, The method will block until the Callable
+     * completes.
      *
      * @param c The Callable to run
      * @return The result of the callable
@@ -71,8 +71,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Run the supplied FutureTask on the main thread. The method will block
-     * only if the current thread is the main thread.
+     * Run the supplied FutureTask on the main thread. The method will block only if the current
+     * thread is the main thread.
      *
      * @param task The FutureTask to run
      * @return The queried task (to aid inline construction)
@@ -87,8 +87,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Run the supplied Callable on the main thread. The method will block
-     * only if the current thread is the main thread.
+     * Run the supplied Callable on the main thread. The method will block only if the current
+     * thread is the main thread.
      *
      * @param c The Callable to run
      * @return A FutureTask wrapping the callable to retrieve results
@@ -98,8 +98,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Run the supplied Runnable on the main thread. The method will block
-     * only if the current thread is the main thread.
+     * Run the supplied Runnable on the main thread. The method will block only if the current
+     * thread is the main thread.
      *
      * @param r The Runnable to run
      */
@@ -112,8 +112,8 @@ public class ThreadUtils {
     }
 
     /**
-     * Post the supplied FutureTask to run on the main thread. The method will
-     * not block, even if called on the UI thread.
+     * Post the supplied FutureTask to run on the main thread. The method will not block, even if
+     * called on the UI thread.
      *
      * @param task The FutureTask to run
      * @return The queried task (to aid inline construction)
@@ -124,13 +124,24 @@ public class ThreadUtils {
     }
 
     /**
-     * Post the supplied Runnable to run on the main thread. The method will
-     * not block, even if called on the UI thread.
+     * Post the supplied Runnable to run on the main thread. The method will not block, even if
+     * called on the UI thread.
      *
      * @param task The Runnable to run
      */
     public static void postOnUiThread(Runnable r) {
         LazyHolder.sUiThreadHandler.post(r);
+    }
+
+    /**
+     * Post the supplied Runnable to run on the main thread after the given amount of time. The
+     * method will not block, even if called on the UI thread.
+     *
+     * @param task The Runnable to run
+     * @param delayMillis The delay in milliseconds until the Runnable will be run
+     */
+    public static void postOnUiThreadDelayed(Runnable r, long delayMillis) {
+        LazyHolder.sUiThreadHandler.postDelayed(r, delayMillis);
     }
 
     /**

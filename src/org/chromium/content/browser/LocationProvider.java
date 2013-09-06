@@ -17,6 +17,7 @@ import org.chromium.base.ActivityStatus;
 import org.chromium.base.CalledByNative;
 import org.chromium.base.ThreadUtils;
 
+import java.util.List;
 import java.util.concurrent.FutureTask;
 
 /**
@@ -102,13 +103,17 @@ class LocationProvider {
             // possible that we receive callbacks after unregistering. At this point, the
             // native object will no longer exist.
             if (mIsRunning) {
-                nativeNewLocationAvailable(location.getLatitude(), location.getLongitude(),
-                        location.getTime() / 1000.0,
-                        location.hasAltitude(), location.getAltitude(),
-                        location.hasAccuracy(), location.getAccuracy(),
-                        location.hasBearing(), location.getBearing(),
-                        location.hasSpeed(), location.getSpeed());
+                updateNewLocation(location);
             }
+        }
+
+        private void updateNewLocation(Location location) {
+            nativeNewLocationAvailable(location.getLatitude(), location.getLongitude(),
+                    location.getTime() / 1000.0,
+                    location.hasAltitude(), location.getAltitude(),
+                    location.hasAccuracy(), location.getAccuracy(),
+                    location.hasBearing(), location.getBearing(),
+                    location.hasSpeed(), location.getSpeed());
         }
 
         @Override
@@ -137,6 +142,7 @@ class LocationProvider {
          */
         private void registerForLocationUpdates() {
             ensureLocationManagerCreated();
+            if (usePassiveOneShotLocation()) return;
 
             assert !mIsRunning;
             mIsRunning = true;
@@ -168,6 +174,35 @@ class LocationProvider {
                 mIsRunning = false;
                 mLocationManager.removeUpdates(this);
             }
+        }
+
+        private boolean usePassiveOneShotLocation() {
+            if (!isOnlyPassiveLocationProviderEnabled()) return false;
+
+            // Do not request a location update if the only available location provider is
+            // the passive one. Make use of the last known location and call
+            // onLocationChanged directly.
+            final Location location = mLocationManager.getLastKnownLocation(
+                    LocationManager.PASSIVE_PROVIDER);
+            if (location != null) {
+                ThreadUtils.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        updateNewLocation(location);
+                    }
+                });
+            }
+            return true;
+        }
+
+        /*
+         * Checks if the passive location provider is the only provider available
+         * in the system.
+         */
+        private boolean isOnlyPassiveLocationProviderEnabled() {
+            List<String> providers = mLocationManager.getProviders(true);
+            return providers != null && providers.size() == 1
+                    && providers.get(0).equals(LocationManager.PASSIVE_PROVIDER);
         }
     }
 

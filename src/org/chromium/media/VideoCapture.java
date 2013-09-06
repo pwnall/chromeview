@@ -31,9 +31,35 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
         public int mDesiredFps = 0;
     }
 
+    // Some devices with OS older than JELLY_BEAN don't support YV12 format correctly.
+    // Some devices don't support YV12 format correctly even with JELLY_BEAN or newer OS.
+    // To work around the issues on those devices, we'd have to request NV21.
+    // This is a temporary hack till device manufacturers fix the problem or
+    // we don't need to support those devices any more.
+    private static class DeviceImageFormatHack {
+        private static final String[] sBUGGY_DEVICE_LIST = {
+            "SAMSUNG-SGH-I747",
+        };
+
+        static int getImageFormat() {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.JELLY_BEAN) {
+                return ImageFormat.NV21;
+            }
+
+            for (String buggyDevice : sBUGGY_DEVICE_LIST) {
+                if (buggyDevice.contentEquals(android.os.Build.MODEL)) {
+                    return ImageFormat.NV21;
+                }
+            }
+
+            return ImageFormat.YV12;
+        }
+    }
+
     private Camera mCamera;
     public ReentrantLock mPreviewBufferLock = new ReentrantLock();
-    private int mPixelFormat = ImageFormat.YV12;
+    private int mImageFormat = ImageFormat.YV12;
+    private byte[] mColorPlane = null;
     private Context mContext = null;
     // True when native code has started capture.
     private boolean mIsRunning = false;
@@ -87,26 +113,29 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
 
             // Calculate fps.
             List<int[]> listFpsRange = parameters.getSupportedPreviewFpsRange();
+            if (listFpsRange.size() == 0) {
+                Log.e(TAG, "allocate: no fps range found");
+                return false;
+            }
             int frameRateInMs = frameRate * 1000;
-            boolean fpsIsSupported = false;
-            int fpsMin = 0;
-            int fpsMax = 0;
             Iterator itFpsRange = listFpsRange.iterator();
+            int[] fpsRange = (int[])itFpsRange.next();
+            // Use the first range as default.
+            int fpsMin = fpsRange[0];
+            int fpsMax = fpsRange[1];
+            int newFrameRate = (fpsMin + 999) / 1000;
             while (itFpsRange.hasNext()) {
-                int[] fpsRange = (int[])itFpsRange.next();
+                fpsRange = (int[])itFpsRange.next();
                 if (fpsRange[0] <= frameRateInMs &&
                     frameRateInMs <= fpsRange[1]) {
-                    fpsIsSupported = true;
                     fpsMin = fpsRange[0];
                     fpsMax = fpsRange[1];
+                    newFrameRate = frameRate;
                     break;
                 }
             }
-
-            if (!fpsIsSupported) {
-                Log.e(TAG, "allocate: fps " + frameRate + " is not supported");
-                return false;
-            }
+            frameRate = newFrameRate;
+            Log.d(TAG, "allocate: fps set to " + frameRate);
 
             mCurrentCapability = new CaptureCapability();
             mCurrentCapability.mDesiredFps = frameRate;
@@ -144,8 +173,10 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
             Log.d(TAG, "allocate: matched width=" + matchedWidth +
                   ", height=" + matchedHeight);
 
+            calculateImageFormat(matchedWidth, matchedHeight);
+
             parameters.setPreviewSize(matchedWidth, matchedHeight);
-            parameters.setPreviewFormat(mPixelFormat);
+            parameters.setPreviewFormat(mImageFormat);
             parameters.setPreviewFpsRange(fpsMin, fpsMax);
             mCamera.setParameters(parameters);
 
@@ -171,7 +202,7 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
             mCamera.setPreviewTexture(mSurfaceTexture);
 
             int bufSize = matchedWidth * matchedHeight *
-                          ImageFormat.getBitsPerPixel(mPixelFormat) / 8;
+                          ImageFormat.getBitsPerPixel(mImageFormat) / 8;
             for (int i = 0; i < NUM_CAPTURE_BUFFERS; i++) {
                 byte[] buffer = new byte[bufSize];
                 mCamera.addCallbackBuffer(buffer);
@@ -283,10 +314,13 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
                 if (mCameraFacing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
                     rotation = (mCameraOrientation + rotation) % 360;
                     rotation = (360 - rotation) % 360;
-                    flipHorizontal = (rotation == 180 || rotation == 0);
-                    flipVertical = !flipHorizontal;
+                    flipHorizontal = (rotation == 270 || rotation == 90);
+                    flipVertical = flipHorizontal;
                 } else {
                     rotation = (mCameraOrientation - rotation + 360) % 360;
+                }
+                if (mImageFormat == ImageFormat.NV21) {
+                    convertNV21ToYV12(data);
                 }
                 nativeOnFrameAvailable(mNativeVideoCaptureDeviceAndroid,
                         data, mExpectedFrameSize,
@@ -373,5 +407,23 @@ public class VideoCapture implements PreviewCallback, OnFrameAvailableListener {
             }
         }
         return orientation;
+    }
+
+    private void calculateImageFormat(int width, int height) {
+        mImageFormat = DeviceImageFormatHack.getImageFormat();
+        if (mImageFormat == ImageFormat.NV21) {
+            mColorPlane = new byte[width * height / 4];
+        }
+    }
+
+    private void convertNV21ToYV12(byte[] data) {
+        final int ySize = mCurrentCapability.mWidth * mCurrentCapability.mHeight;
+        final int uvSize = ySize / 4;
+        for (int i = 0; i < uvSize; i++) {
+            final int index = ySize + i * 2;
+            data[ySize + i] = data[index];
+            mColorPlane[i] = data[index + 1];
+        }
+        System.arraycopy(mColorPlane, 0, data, ySize + uvSize, uvSize);
     }
 }

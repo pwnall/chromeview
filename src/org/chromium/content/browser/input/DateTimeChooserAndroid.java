@@ -28,10 +28,10 @@ class DateTimeChooserAndroid {
             @Override
             public void replaceDateTime(
                     int dialogType,
-                    int year, int month, int day, int hour, int minute, int second) {
+                    int year, int month, int day, int hour, int minute, int second, int week) {
                 nativeReplaceDateTime(mNativeDateTimeChooserAndroid,
                         dialogType,
-                        year, month, day, hour, minute, second);
+                        year, month, day, hour, minute, second, week);
             }
 
             @Override
@@ -42,9 +42,9 @@ class DateTimeChooserAndroid {
     }
 
     private void showDialog(int dialogType, int year, int month, int monthDay,
-            int hour, int minute, int second) {
+            int hour, int minute, int second, int week, double min, double max) {
         mInputDialogContainer.showDialog(dialogType, year, month, monthDay,
-                hour, minute, second);
+                hour, minute, second, week, min, max);
     }
 
     @CalledByNative
@@ -52,25 +52,26 @@ class DateTimeChooserAndroid {
             ContentViewCore contentViewCore,
             int nativeDateTimeChooserAndroid, int dialogType,
             int year, int month, int day,
-            int hour, int minute, int second) {
+            int hour, int minute, int second, int week, double min, double max) {
         DateTimeChooserAndroid chooser =
                 new DateTimeChooserAndroid(
                         contentViewCore.getContext(), nativeDateTimeChooserAndroid);
-        chooser.showDialog(dialogType, year, month, day, hour, minute, second);
+        chooser.showDialog(dialogType, year, month, day, hour, minute, second, week, min, max);
         return chooser;
     }
 
     @CalledByNative
     private static void initializeDateInputTypes(int textInputTypeDate, int textInputTypeDateTime,
             int textInputTypeDateTimeLocal, int textInputTypeMonth,
-            int textInputTypeTime) {
-        InputDialogContainer.initializeInputTypes(textInputTypeDate, textInputTypeDateTime,
-                textInputTypeDateTimeLocal, textInputTypeMonth, textInputTypeTime);
+            int textInputTypeTime, int textInputTypeWeek) {
+        InputDialogContainer.initializeInputTypes(textInputTypeDate,
+                textInputTypeDateTime, textInputTypeDateTimeLocal,
+                textInputTypeMonth, textInputTypeTime, textInputTypeWeek);
     }
 
     private native void nativeReplaceDateTime(int nativeDateTimeChooserAndroid,
             int dialogType,
-            int year, int month, int day, int hour, int minute, int second);
+            int year, int month, int day, int hour, int minute, int second, int week);
 
     private native void nativeCancelDialog(int nativeDateTimeChooserAndroid);
 }

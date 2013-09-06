@@ -48,7 +48,7 @@ class DeviceMotionAndOrientation implements SensorEventListener {
     private Object mNativePtrLock = new Object();
 
     // The acceleration vector including gravity expressed in the body frame.
-    private float[] mAccelerationVector;
+    private float[] mAccelerationIncludingGravityVector;
 
     // The geomagnetic vector expressed in the body frame.
     private float[] mMagneticFieldVector;
@@ -120,6 +120,13 @@ class DeviceMotionAndOrientation implements SensorEventListener {
         }
     }
 
+    @CalledByNative
+    public int getNumberActiveDeviceMotionSensors() {
+        Set<Integer> deviceMotionSensors = Sets.newHashSet(DEVICE_MOTION_SENSORS);
+        deviceMotionSensors.removeAll(mActiveSensors);
+        return DEVICE_MOTION_SENSORS.size() - deviceMotionSensors.size();
+    }
+
     /**
      * Stop listening to sensors for a given event type. Ensures that sensors are not disabled
      * if they are still in use by a different event type.
@@ -174,14 +181,19 @@ class DeviceMotionAndOrientation implements SensorEventListener {
 
         switch (type) {
             case Sensor.TYPE_ACCELEROMETER:
-                if (mAccelerationVector == null) {
-                    mAccelerationVector = new float[3];
+                if (mAccelerationIncludingGravityVector == null) {
+                    mAccelerationIncludingGravityVector = new float[3];
                 }
-                System.arraycopy(values, 0, mAccelerationVector, 0,
-                        mAccelerationVector.length);
+                System.arraycopy(values, 0, mAccelerationIncludingGravityVector,
+                        0, mAccelerationIncludingGravityVector.length);
                 if (mDeviceMotionIsActive) {
-                    gotAccelerationIncludingGravity(mAccelerationVector[0], mAccelerationVector[1],
-                        mAccelerationVector[2]);
+                    gotAccelerationIncludingGravity(
+                            mAccelerationIncludingGravityVector[0],
+                            mAccelerationIncludingGravityVector[1],
+                            mAccelerationIncludingGravityVector[2]);
+                }
+                if (mDeviceOrientationIsActive) {
+                    getOrientationUsingGetRotationMatrix();
                 }
                 break;
             case Sensor.TYPE_LINEAR_ACCELERATION:
@@ -200,19 +212,18 @@ class DeviceMotionAndOrientation implements SensorEventListener {
                 }
                 System.arraycopy(values, 0, mMagneticFieldVector, 0,
                         mMagneticFieldVector.length);
+                if (mDeviceOrientationIsActive) {
+                    getOrientationUsingGetRotationMatrix();
+                }
                 break;
             default:
                 // Unexpected
                 return;
         }
-
-        if (mDeviceOrientationIsActive) {
-            getOrientationUsingGetRotationMatrix();
-        }
     }
 
     private void getOrientationUsingGetRotationMatrix() {
-        if (mAccelerationVector == null || mMagneticFieldVector == null) {
+        if (mAccelerationIncludingGravityVector == null || mMagneticFieldVector == null) {
             return;
         }
 
@@ -220,8 +231,8 @@ class DeviceMotionAndOrientation implements SensorEventListener {
         // The rotation matrix that transforms from the body frame to the earth
         // frame.
         float[] deviceRotationMatrix = new float[9];
-        if (!SensorManager.getRotationMatrix(deviceRotationMatrix, null, mAccelerationVector,
-                mMagneticFieldVector)) {
+        if (!SensorManager.getRotationMatrix(deviceRotationMatrix, null,
+                mAccelerationIncludingGravityVector, mMagneticFieldVector)) {
             return;
         }
 

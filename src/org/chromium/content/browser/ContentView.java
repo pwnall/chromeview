@@ -417,12 +417,6 @@ public class ContentView extends FrameLayout
         return super.drawChild(canvas, child, drawingTime);
     }
 
-    // Needed by ContentViewCore.InternalAccessDelegate
-    @Override
-    public void onScrollChanged(int l, int t, int oldl, int oldt) {
-        super.onScrollChanged(l, t, oldl, oldt);
-    }
-
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         TraceEvent.begin();
@@ -483,12 +477,20 @@ public class ContentView extends FrameLayout
      */
     @Override
     public boolean onHoverEvent(MotionEvent event) {
-        return mContentViewCore.onHoverEvent(event);
+        MotionEvent offset = createOffsetMotionEvent(event);
+        boolean consumed = mContentViewCore.onHoverEvent(offset);
+        offset.recycle();
+        return consumed;
     }
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
         return mContentViewCore.onGenericMotionEvent(event);
+    }
+
+    @Override
+    public boolean performLongClick() {
+        return false;
     }
 
     /**

@@ -51,7 +51,8 @@ public class AdapterInputConnection extends BaseInputConnection {
         mImeAdapter = imeAdapter;
         mImeAdapter.setInputConnection(this);
         mSingleLine = true;
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
+                | EditorInfo.IME_FLAG_NO_EXTRACT_UI;
         outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT
                 | EditorInfo.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT;
 
@@ -124,24 +125,23 @@ public class AdapterInputConnection extends BaseInputConnection {
         // Non-breaking spaces can cause the IME to get confused. Replace with normal spaces.
         text = text.replace('\u00A0', ' ');
 
-        Editable editable = getEditable();
-
-        int prevSelectionStart = Selection.getSelectionStart(editable);
-        int prevSelectionEnd = Selection.getSelectionEnd(editable);
-        int prevCompositionStart = getComposingSpanStart(editable);
-        int prevCompositionEnd = getComposingSpanEnd(editable);
-        String prevText = editable.toString();
-
         selectionStart = Math.min(selectionStart, text.length());
         selectionEnd = Math.min(selectionEnd, text.length());
         compositionStart = Math.min(compositionStart, text.length());
         compositionEnd = Math.min(compositionEnd, text.length());
 
+        Editable editable = getEditable();
+        String prevText = editable.toString();
         boolean textUnchanged = prevText.equals(text);
 
         if (!textUnchanged) {
             editable.replace(0, editable.length(), text);
         }
+
+        int prevSelectionStart = Selection.getSelectionStart(editable);
+        int prevSelectionEnd = Selection.getSelectionEnd(editable);
+        int prevCompositionStart = getComposingSpanStart(editable);
+        int prevCompositionEnd = getComposingSpanEnd(editable);
 
         if (prevSelectionStart == selectionStart && prevSelectionEnd == selectionEnd
                 && prevCompositionStart == compositionStart
@@ -311,7 +311,6 @@ public class AdapterInputConnection extends BaseInputConnection {
     @Override
     public boolean sendKeyEvent(KeyEvent event) {
         if (DEBUG) Log.w(TAG, "sendKeyEvent [" + event.getAction() + "]");
-        mImeAdapter.hideSelectionAndInsertionHandleControllers();
 
         // If this is a key-up, and backspace/del or if the key has a character representation,
         // need to update the underlying Editable (i.e. the local representation of the text
@@ -352,19 +351,9 @@ public class AdapterInputConnection extends BaseInputConnection {
             return true;
         }
 
-        // TODO(aurimas): remove this workaround of changing composition before confirmComposition
-        //                Blink should support keeping the cursor (http://crbug.com/239923)
-        int selectionStart = Selection.getSelectionStart(editable);
-        int compositionStart = getComposingSpanStart(editable);
         super.finishComposingText();
+        mImeAdapter.finishComposingText();
 
-        beginBatchEdit();
-        if (compositionStart != -1 && compositionStart < selectionStart
-                && !mImeAdapter.setComposingRegion(compositionStart, selectionStart)) {
-            return false;
-        }
-        if (!mImeAdapter.checkCompositionQueueAndCallNative("", 0, true)) return false;
-        endBatchEdit();
         return true;
     }
 

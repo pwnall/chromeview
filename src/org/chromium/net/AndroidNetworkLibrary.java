@@ -30,7 +30,7 @@ import java.util.Enumeration;
  */
 class AndroidNetworkLibrary {
 
-    private static final String TAG = AndroidNetworkLibrary.class.getName();
+    private static final String TAG = "AndroidNetworkLibrary";
 
     /**
      * Stores the key pair through the CertInstaller activity.

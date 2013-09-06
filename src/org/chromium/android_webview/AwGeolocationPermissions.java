@@ -21,7 +21,7 @@ import java.util.Set;
 public final class AwGeolocationPermissions {
 
     private static final String PREF_PREFIX =
-            AwGeolocationPermissions.class.getCanonicalName() + "%";
+            "AwGeolocationPermissions%";
     private final SharedPreferences mSharedPreferences;
 
     public AwGeolocationPermissions(SharedPreferences sharedPreferences) {

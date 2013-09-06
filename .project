@@ -30,4 +30,11 @@
 		<nature>com.android.ide.eclipse.adt.AndroidNature</nature>
 		<nature>org.eclipse.jdt.core.javanature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>android-17</name>
+			<type>2</type>
+			<location>/Users/davis/Downloads/adt-bundle-mac-x86_64-20130522/sdk/sources/android-17</location>
+		</link>
+	</linkedResources>
 </projectDescription>

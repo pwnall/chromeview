@@ -26,18 +26,19 @@ public final class R {
     }
     public static final class id {
         public static int date_picker;
-        public static int month;
+        public static int position_in_year;
         public static int pickers;
         public static int time_picker;
         public static int year;
     }
     public static final class layout {
         public static int date_time_picker_dialog;
-        public static int month_picker;
+        public static int two_field_date_picker;
     }
     public static final class string {
         public static int accessibility_content_view;
         public static int accessibility_date_picker_month;
+        public static int accessibility_date_picker_week;
         public static int accessibility_date_picker_year;
         public static int accessibility_datetime_picker_date;
         public static int accessibility_datetime_picker_time;
@@ -53,5 +54,6 @@ public final class R {
         public static int media_player_error_title;
         public static int media_player_loading_video;
         public static int month_picker_dialog_title;
+        public static int week_picker_dialog_title;
     }
 }

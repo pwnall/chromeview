@@ -1,0 +1,13 @@
+# Changes in this folder are guaranteed to affect the downstream
+# android_webview build. Adding one of the folks from the below list to the
+# review gives us time to prepare a matching change ahead of time so that our
+# downstream build can continue running smoothly.
+set noparent
+
+benm@chromium.org
+boliu@chomium.org
+joth@chromium.org
+mkosiba@chromium.org
+mnaganov@chromium.org
+primiano@chromium.org
+torne@chromium.org

@@ -141,4 +141,15 @@ class TouchPoint {
         TOUCH_POINT_STATE_STATIONARY = touchPointStationary;
         TOUCH_POINT_STATE_CANCELLED = touchPointCancelled;
     }
+
+    /**
+     * Initialize the constants to distinct values if they have not been initialized.
+     * During pure-Java testing, initializeConstants() may not be called by native code.
+     * Unit tests should call this method before using the values.
+     */
+    static void initializeConstantsForTesting() {
+        if (TOUCH_EVENT_TYPE_START == TOUCH_EVENT_TYPE_MOVE) {
+            initializeConstants(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        }
+    }
 }

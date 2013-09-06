@@ -1,4 +1,9 @@
+
+
+
+
 package org.chromium.content.browser;
+
 public class PageTransitionTypes {
 public static final int PAGE_TRANSITION_LINK = 0;
 public static final int PAGE_TRANSITION_TYPED = 1;
@@ -17,7 +22,7 @@ public static final int PAGE_TRANSITION_BLOCKED = 0x00800000;
 public static final int PAGE_TRANSITION_FORWARD_BACK = 0x01000000;
 public static final int PAGE_TRANSITION_FROM_ADDRESS_BAR = 0x02000000;
 public static final int PAGE_TRANSITION_HOME_PAGE = 0x04000000;
-public static final int PAGE_TRANSITION_FROM_INTENT = 0x08000000;
+public static final int PAGE_TRANSITION_FROM_API = 0x08000000;
 public static final int PAGE_TRANSITION_CHAIN_START = 0x10000000;
 public static final int PAGE_TRANSITION_CHAIN_END = 0x20000000;
 public static final int PAGE_TRANSITION_CLIENT_REDIRECT = 0x40000000;

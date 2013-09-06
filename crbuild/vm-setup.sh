@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Idempotent VM setup / upgrade script.
 
 set -o errexit  # Stop the script on the first error.
@@ -6,6 +6,7 @@ set -o nounset  # Catch un-initialized variables.
 
 # Enable password-less sudo for the current user.
 sudo sh -c "echo '$USER ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/$USER"
+sudo chmod 0440 /etc/sudoers.d/crbuild
 
 # Sun JDK 6.
 if [ ! -f /usr/bin/javac ] ; then
@@ -74,6 +75,12 @@ fi
 
 # Subversion and git-svn.
 sudo apt-get install -y git-svn subversion
+
+# curl is needed for Chrome OS fonts
+sudo apt-get install curl
+
+# automatically accept msttcorefonts eula 
+sudo sh -c "echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections"
 
 # Chromium source.
 # https://code.google.com/p/chromium/wiki/UsingGit

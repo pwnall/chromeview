@@ -124,19 +124,15 @@ class MediaPlayerListener implements MediaPlayer.OnPreparedListener,
 
     @CalledByNative
     private static MediaPlayerListener create(int nativeMediaPlayerListener,
-            Context context, MediaPlayer mediaPlayer) {
+            Context context, MediaPlayerBridge mediaPlayerBridge) {
         final MediaPlayerListener listener =
                 new MediaPlayerListener(nativeMediaPlayerListener, context);
-        mediaPlayer.setOnBufferingUpdateListener(listener);
-        mediaPlayer.setOnCompletionListener(listener);
-        mediaPlayer.setOnErrorListener(listener);
-        mediaPlayer.setOnPreparedListener(listener);
-        mediaPlayer.setOnSeekCompleteListener(listener);
-        mediaPlayer.setOnVideoSizeChangedListener(listener);
-        if (PackageManager.PERMISSION_GRANTED ==
-                context.checkCallingOrSelfPermission(permission.WAKE_LOCK)) {
-            mediaPlayer.setWakeMode(context, android.os.PowerManager.FULL_WAKE_LOCK);
-        }
+        mediaPlayerBridge.setOnBufferingUpdateListener(listener);
+        mediaPlayerBridge.setOnCompletionListener(listener);
+        mediaPlayerBridge.setOnErrorListener(listener);
+        mediaPlayerBridge.setOnPreparedListener(listener);
+        mediaPlayerBridge.setOnSeekCompleteListener(listener);
+        mediaPlayerBridge.setOnVideoSizeChangedListener(listener);
 
         AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
         am.requestAudioFocus(
@@ -144,7 +140,7 @@ class MediaPlayerListener implements MediaPlayer.OnPreparedListener,
                 AudioManager.STREAM_MUSIC,
 
                 // Request permanent focus.
-                AudioManager.AUDIOFOCUS_GAIN);
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
         return listener;
     }
 

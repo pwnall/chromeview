@@ -104,6 +104,7 @@ public class SelectActionModeCallback implements ActionMode.Callback {
 
     @Override
     public boolean onCreateActionMode(ActionMode mode, Menu menu) {
+        mode.setTitle(null);
         mode.setSubtitle(null);
         mEditable = mActionHandler.isSelectionEditable();
         createActionMenu(mode, menu);

@@ -21,7 +21,7 @@ import org.chromium.content.common.TraceEvent;
  * approximation of a vertical sync starting point; see also http://crbug.com/156397.
  */
 public class VSyncMonitor {
-    private static final String TAG = VSyncMonitor.class.getSimpleName();
+    private static final String TAG = "VSyncMonitor";
 
     public interface Listener {
         /**
