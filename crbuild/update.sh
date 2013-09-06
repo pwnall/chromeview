@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Updates this project with the Chrome build files.
 # This script assumes the Chrome build VM is up at crbuild.local
 
