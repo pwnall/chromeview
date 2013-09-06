@@ -3,6 +3,9 @@
 
 set -o errexit  # Stop the script on the first error.
 
+CPUS=${CPUS-4}
+echo "Building with '-j$CPUS'. Set the environment variable CPUS to change the number."
+
 cd ~/chromium/
 # https://code.google.com/p/chromium/wiki/UsingGit
 gclient sync --jobs 16
