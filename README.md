@@ -1,8 +1,21 @@
+# Deprecation Notice
+
+This project is un-maintained. The recommended alternative is
+[the Crosswalk Project](https://crosswalk-project.org/).
+
+I did not have the time to keep the project up to date. In the mean
+time, the fine folks at Intel did a great job of embedding Chromium
+using the Content Shell API, which is what Chromium's developers
+intended. Therefore, I cannot justify spending any time on this.
+The original README and the code are here for historical purposes.
+
+I think that [the Crosswalk Project](https://crosswalk-project.org/)
+will meet all your embedding needs, and I'm contributing to it.
+
 # ChromeView
 
 ChormeView works like Android's WebView, but is backed by the latest Chromium
 code.
-
 
 ## Why ChromeView
 
