@@ -75,6 +75,9 @@ fi
 # Subversion and git-svn.
 sudo apt-get install -y git-svn subversion
 
+# curl is needed for Chrome OS fonts
+sudo apt-get install curl
+
 # Chromium source.
 # https://code.google.com/p/chromium/wiki/UsingGit
 # http://dev.chromium.org/developers/how-tos/get-the-code
